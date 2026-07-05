@@ -1,0 +1,18 @@
+# ==========================================
+# PACE: Development & Testing
+# ==========================================
+-r requirements.txt
+
+# --- Testing Framework ---
+pytest>=8.0.0
+pytest-asyncio>=0.23.5
+httpx>=0.27.0            # Required for FastAPI endpoint unit testing
+
+# --- Code Formatting & Linting ---
+black>=24.2.0
+flake8>=7.0.0
+mypy>=1.8.0              # Strict type checking for the VRAM scheduler
+
+# --- Profiling & Memory Management ---
+memory-profiler>=0.61.0  # To track CPU RAM spikes during tokenization
+nvidia-ml-py>=12.535.0   # To programmatically read RTX 4060 VRAM from Python
