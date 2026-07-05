@@ -10,9 +10,7 @@ data/
 *.bin
 *.h5
 
-# DVC
-.dvc/
-.dvcignore
+
 
 # Python
 __pycache__/
