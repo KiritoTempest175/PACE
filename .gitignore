@@ -53,3 +53,8 @@ mlruns/
 tmp/
 temp/
 *.tmp
+
+# Ignore ML model weights and training artifacts
+masteries/coding/artifacts/
+*.safetensors
+*.bin
