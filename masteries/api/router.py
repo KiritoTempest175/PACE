@@ -10,7 +10,7 @@ router = APIRouter()
 @router.get("/")
 def root():
     return {
-        "message": "PACE Backend Running 🚀"
+        "message": "PACE Backend Running"
     }
 
 @router.get("/health")
