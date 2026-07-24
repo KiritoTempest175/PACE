@@ -12,7 +12,6 @@ def generate_fix(
     prompt: str, model_id: str = "Qwen/Qwen2.5-Coder-1.5B-Instruct"
 ) -> str:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
     tokenizer = AutoTokenizer.from_pretrained(model_id)
     tokenizer.pad_token = tokenizer.eos_token
     model = AutoModelForCausalLM.from_pretrained(
@@ -33,6 +32,8 @@ def generate_fix(
             **inputs, max_new_tokens=256, temperature=0.2, do_sample=True
         )
 
+    decoded_text = tokenizer.decode(generated_ids[0], skip_special_tokens=True)
+
     del model, tokenizer, inputs, generated_ids
     gc.collect()
     if device.type == "cuda":
@@ -40,6 +41,8 @@ def generate_fix(
         print(
             f"[VRAM] Pipeline Purged. Idling Context Footprint: {torch.cuda.memory_allocated() / (1024**2):.2f} MB"
         )
+
+    return decoded_text
 
 
 if __name__ == "__main__":
