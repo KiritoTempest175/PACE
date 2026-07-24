@@ -57,6 +57,5 @@ async def upload_pdf(file: UploadFile = File(...)):
     }
 
 
-
 # Later, you'll simply replace the dummy logic with a call to Stream A's AI model:
 # prediction = actor_model.generate(request.text)
