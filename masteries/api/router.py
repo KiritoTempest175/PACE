@@ -1,5 +1,7 @@
 from masteries.api.schemas import PredictRequest, PredictResponse
 from fastapi import APIRouter, UploadFile, File
+from masteries.services.chunker import chunk_text
+from masteries.services.pdfparser import extracttext,pagenumber
 from pathlib import Path
 import shutil
 
@@ -43,10 +45,17 @@ async def upload_pdf(file: UploadFile = File(...)):
     with file_path.open("wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
+    text = extracttext(str(file_path))
+    pages =pagenumber(str(file_path))
+    chunks = chunk_text(text)
     return {
         "filename": file.filename,
-        "message": "File uploaded successfully"
+        "pages": pages,
+        "characters": len(text),
+        "chunks": len(chunks),
+        "preview": chunks[0]
     }
+
 
 
 # Later, you'll simply replace the dummy logic with a call to Stream A's AI model:
