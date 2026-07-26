@@ -5,16 +5,20 @@ from transformers import AutoTokenizer
 
 
 class CoderCriticDataset(Dataset):
-    def __init__(self, parquet_path, tokenizer, max_length=512):
-        """
-        Loads the parquet dataset from disk and attaches the tokenizer.
-        """
-        self.df = pd.read_parquet(parquet_path)
+    def __init__(self, parquet_paths, tokenizer, max_length=512):
+
+        print("Fusing datasets...")
+        dfs = [pd.read_parquet(path) for path in parquet_paths]
+
+        self.df = pd.concat(dfs, ignore_index=True)
+
+        self.df = self.df.sample(frac=1, random_state=42).reset_index(drop=True)
+
         self.tokenizer = tokenizer
         self.max_length = max_length
 
-        # Map text labels to mathematical integers for the GPU
         self.label_map = {"CLEAN": 0, "BUG": 1}
+        print(f"Dataset fused & shuffled. Total Critic rows: {len(self.df)}")
 
     def __len__(self):
         return len(self.df)
@@ -24,7 +28,6 @@ class CoderCriticDataset(Dataset):
         code_text = row["mutated_code"]
         raw_label = row["label"]
 
-        # 1. Tokenize the code (Truncate long code, Pad short code to max_length)
         encoding = self.tokenizer(
             code_text,
             padding="max_length",
@@ -33,10 +36,8 @@ class CoderCriticDataset(Dataset):
             return_tensors="pt",
         )
 
-        # 2. Translate label string ("BUG" / "CLEAN") to an integer (1 / 0)
         label_int = self.label_map.get(raw_label, 1)
 
-        # We use .squeeze(0) to turn shape [1, max_len] into a clean 1D array [max_len]
         return {
             "input_ids": encoding["input_ids"].squeeze(0),
             "attention_mask": encoding["attention_mask"].squeeze(0),
@@ -44,20 +45,19 @@ class CoderCriticDataset(Dataset):
         }
 
 
-# --- Quick Test Block ---
 if __name__ == "__main__":
     print("Loading Tokenizer and Testing Updated CoderCriticDataset...")
-    test_tokenizer = AutoTokenizer.from_pretrained("distilgpt2")
-    test_tokenizer.pad_token = test_tokenizer.eos_token
+    test_tokenizer = AutoTokenizer.from_pretrained("microsoft/codebert-base")
 
-    # Pointing to your raw data
-    test_path = "masteries/coding/data/raw/critic_raw_flips.parquet"
-    dataset = CoderCriticDataset(test_path, test_tokenizer, max_length=32)
+    paths = [
+        "masteries/coding/data/raw/critic_raw_constants.parquet",
+        "masteries/coding/data/raw/critic_raw_deletions.parquet",
+        "masteries/coding/data/raw/critic_raw_flips.parquet",
+    ]
 
-    print(f"Total rows: {len(dataset)}")
+    dataset = CoderCriticDataset(paths, test_tokenizer, max_length=32)
+
     print("\nFetching Row 0 (Translated to GPU Math):")
     sample = dataset[0]
     print("Input IDs shape:", sample["input_ids"].shape)
-    print("Input IDs:", sample["input_ids"])
-    print("Attention Mask:", sample["attention_mask"])
     print("Label:", sample["label"])
