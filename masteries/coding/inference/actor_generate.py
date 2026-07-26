@@ -1,6 +1,6 @@
 """
 PACE Actor Inference Node
-Task LE-1: Loads a Causal Language Model, generates a code fix based on a prompt, and returns the string.
+Task LE-1: Loads the trained Actor Model, generates multiple code fixes based on a prompt.
 """
 
 import torch
@@ -8,15 +8,18 @@ import gc
 from transformers import AutoTokenizer, AutoModelForCausalLM
 
 
-def generate_fix(
-    prompt: str, model_id: str = "Qwen/Qwen2.5-Coder-1.5B-Instruct"
-) -> str:
+def generate_fixes(
+    prompt: str,
+    model_dir: str = "masteries/coding/models/actor_v1",
+    num_return_sequences: int = 3,
+) -> list[str]:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    tokenizer = AutoTokenizer.from_pretrained(model_id)
+
+    tokenizer = AutoTokenizer.from_pretrained(model_dir)
     tokenizer.pad_token = tokenizer.eos_token
-    model = AutoModelForCausalLM.from_pretrained(
-        model_id, torch_dtype=torch.float16
-    ).to(device)
+
+    # Load the custom 164M fine-tuned Actor
+    model = AutoModelForCausalLM.from_pretrained(model_dir).to(device)
 
     inputs = tokenizer(
         prompt,
@@ -29,25 +32,28 @@ def generate_fix(
 
     with torch.no_grad():
         generated_ids = model.generate(
-            **inputs, max_new_tokens=256, temperature=0.2, do_sample=True
+            **inputs,
+            max_new_tokens=256,
+            temperature=0.7,
+            do_sample=True,
+            num_return_sequences=num_return_sequences,
         )
 
-    decoded_text = tokenizer.decode(generated_ids[0], skip_special_tokens=True)
+    decoded_texts = tokenizer.batch_decode(generated_ids, skip_special_tokens=True)
 
+    # VRAM PURGE: Destroy tensors and clear cache
     del model, tokenizer, inputs, generated_ids
     gc.collect()
     if device.type == "cuda":
         torch.cuda.empty_cache()
         print(
-            f"[VRAM] Pipeline Purged. Idling Context Footprint: {torch.cuda.memory_allocated() / (1024**2):.2f} MB"
+            f"[VRAM] Actor Purged. Idling Footprint: {torch.cuda.memory_allocated() / (1024**2):.2f} MB"
         )
 
-    return decoded_text
+    return decoded_texts
 
 
 if __name__ == "__main__":
     print("[SYSTEM] Testing Actor Inference Engine...")
-
-    test_prompt = "Fix this Python code:\n```python\ndef calculate_sum(a, b)\n    return a + b\n```\nCorrected code:"
-
-    print(generate_fix(test_prompt))
+    test_prompt = "def calculate_sum(a, b):"
+    print(generate_fixes(test_prompt, num_return_sequences=1))
