@@ -32,7 +32,7 @@ def main():
         tokenizer=tokenizer,
         max_length=512,
     )
-    loader = DataLoader(dataset, batch_size=2, shuffle=True)
+    loader = DataLoader(dataset, batch_size=4, shuffle=True)
 
     # ==========================================
     # 3. NEURAL NETWORK SETUP
