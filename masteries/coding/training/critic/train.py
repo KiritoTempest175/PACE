@@ -28,18 +28,14 @@ def main():
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     tokenizer.pad_token = tokenizer.eos_token
 
-    paths = [
-        "masteries/coding/data/raw/critic_raw_constants.parquet",
-        "masteries/coding/data/raw/critic_raw_deletions.parquet",
-        "masteries/coding/data/raw/critic_raw_flips.parquet",
-    ]
+    paths = ["masteries/coding/data/raw/critic_fused_dataset.parquet"]
 
     dataset = CoderCriticDataset(
         parquet_paths=paths,
         tokenizer=tokenizer,
         max_length=512,
     )
-    loader = DataLoader(dataset, batch_size=4, shuffle=True)
+    loader = DataLoader(dataset, batch_size=8, shuffle=True)
     # ==========================================
     # 3. NEURAL NETWORK SETUP
     # ==========================================
