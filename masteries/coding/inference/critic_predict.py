@@ -9,7 +9,7 @@ from transformers import AutoTokenizer, AutoModelForSequenceClassification
 
 
 def evaluate_syntax_batch(
-    code_snippets: list[str], model_dir: str = "masteries/coding/models/critic_v1"
+    code_snippets: list[str], model_dir: str = "masteries/coding/models/critic_v3"
 ) -> list[float]:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
