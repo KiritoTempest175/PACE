@@ -32,7 +32,7 @@ def main():
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     tokenizer.pad_token = tokenizer.eos_token
 
-    paths = ["masteries/coding/data/raw/codecontests_fused_dataset.parquet"]
+    paths = ["masteries/coding/data/raw/codeforces_fused_dataset.parquet"]
 
     full_dataset = CoderCriticDataset(
         parquet_paths=paths,
