@@ -58,3 +58,4 @@ temp/
 masteries/coding/artifacts/
 *.safetensors
 *.bin
+masteries/coding/models/

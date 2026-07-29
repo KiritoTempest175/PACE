@@ -2,7 +2,7 @@ import torch
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-model_dir = "masteries/coding/models/critic_v3"
+model_dir = "masteries/coding/models/critic_best"
 
 print("Loading Critic...")
 tokenizer = AutoTokenizer.from_pretrained(model_dir)

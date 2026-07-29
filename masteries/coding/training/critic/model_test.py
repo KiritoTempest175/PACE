@@ -111,7 +111,7 @@ def main():
     # ==========================================
     # 2. LOAD FINE-TUNED MODEL & TOKENIZER
     # ==========================================
-    model_dir = "masteries/coding/models/critic_v1"
+    model_dir = "masteries/coding/models/critic_v4_epoch_5"
     print(f"Loading fine-tuned critic model from: {model_dir}")
 
     tokenizer = AutoTokenizer.from_pretrained(model_dir)
@@ -126,9 +126,7 @@ def main():
     # 3. PREPARE TEST SPLIT
     # ==========================================
     paths = [
-        "masteries/coding/data/raw/critic_raw_constants.parquet",
-        "masteries/coding/data/raw/critic_raw_deletions.parquet",
-        "masteries/coding/data/raw/critic_raw_flips.parquet",
+        "masteries/coding/data/raw/pyresbugs_fused_dataset.parquet",
     ]
     full_dataset = CoderCriticDataset(
         parquet_paths=paths,

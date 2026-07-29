@@ -68,9 +68,9 @@ def main():
     # ==========================================
     # 4. THE FULL TRAINING LOOP
     # ==========================================
-    epochs = 10
+    epochs = 5
     accumulation_steps = 4
-    save_dir = "masteries/coding/models/critic_v3"
+    save_dir = "masteries/coding/models/critic_v4"
 
     num_training_steps = epochs * (len(train_loader) // accumulation_steps)
     lr_scheduler = get_cosine_schedule_with_warmup(
@@ -150,17 +150,16 @@ def main():
         # ==========================================
         if val_acc > best_val_acc:
             print(
-                f"Validation accuracy improved from {best_val_acc:.4f} to {val_acc:.4f}. Saving model to {save_dir}..."
+                f"Validation accuracy improved from {best_val_acc:.4f} to {val_acc:.4f}."
             )
             best_val_acc = val_acc
-            os.makedirs(save_dir, exist_ok=True)
-            model.save_pretrained(save_dir)
-            tokenizer.save_pretrained(save_dir)
-            print("Model saved successfully!")
-        else:
-            print(
-                f"Validation accuracy did not improve from {best_val_acc:.4f}. Not saving."
-            )
+
+        epoch_save_dir = f"{save_dir}_epoch_{epoch+1}"
+        print(f"Saving model to {epoch_save_dir}...")
+        os.makedirs(epoch_save_dir, exist_ok=True)
+        model.save_pretrained(epoch_save_dir)
+        tokenizer.save_pretrained(epoch_save_dir)
+        print("Model saved successfully!")
 
 
 if __name__ == "__main__":
