@@ -1,191 +1,166 @@
 """
-PACE (Pipelined Actor-Critic Ensemble) - Phase 2
-Critic Model Training Pipeline & Hardware State Machine
-
-Enforces strict NVIDIA RTX 4060 VRAM memory management and multi-epoch
-sequence classification training using DistilGPT-2.
+PACE Critic Full Training Loop
+Task: Train a 125M parameter CodeBERT classifier to detect bugs (0 = Clean, 1 = Bug).
 """
 
-import gc
 import os
 import torch
-from torch.utils.data import DataLoader
-from transformers import AutoTokenizer, AutoModelForSequenceClassification
-from masteries.coding.training.critic.dataset import CoderCriticDataset
+from torch.utils.data import DataLoader, random_split
+from transformers import (
+    AutoTokenizer,
+    AutoModelForSequenceClassification,
+    get_cosine_schedule_with_warmup,
+)
+from torch.optim import AdamW
+from tqdm import tqdm
+
+from dataset import CoderCriticDataset
 
 
-def get_critic_dataloader(parquet_path, batch_size=8, shuffle=True):
+def main():
+    # ==========================================
+    # 1. HARDWARE SETUP
+    # ==========================================
 
-    tokenizer = AutoTokenizer.from_pretrained("distilgpt2")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    # ==========================================
+    # 2. DATA PIPELINE
+    # ==========================================
+    model_name = "microsoft/codebert-base"
+
+    tokenizer = AutoTokenizer.from_pretrained(model_name)
     tokenizer.pad_token = tokenizer.eos_token
 
-    dataset = CoderCriticDataset(
-        parquet_path=parquet_path,
+    paths = ["masteries/coding/data/raw/codeforces_fused_dataset.parquet"]
+
+    full_dataset = CoderCriticDataset(
+        parquet_paths=paths,
         tokenizer=tokenizer,
         max_length=512,
     )
 
-    loader = DataLoader(
-        dataset=dataset,
-        batch_size=8,
-        shuffle=True,
-        num_workers=0,
-        pin_memory=torch.cuda.is_available(),
-    )
+    train_size = int(0.8 * len(full_dataset))
+    val_size = len(full_dataset) - train_size
+    train_dataset, val_dataset = random_split(full_dataset, [train_size, val_size])
 
-    return loader, tokenizer
+    train_loader = DataLoader(train_dataset, batch_size=8, shuffle=True)
+    val_loader = DataLoader(val_dataset, batch_size=8, shuffle=False)
 
-
-def test_data_pipeline():
-
-    print("[SYSTEM] Initializing Data Delivery Pipeline...")
-
-    train_loader, _ = get_critic_dataloader(
-        "masteries/coding/data/raw/critic_raw_deletions.parquet"
-    )
-    print(f"[SUCCESS] DataLoader configured with {len(train_loader)} total batches.")
-
-    print("[SYSTEM] Fetching test batch from pipeline...")
-    test_batch = next(iter(train_loader))
-
-    print("\n--- BATCH MATRIX VERIFICATION ---")
-    print(
-        f"Input IDs Shape:      {test_batch['input_ids'].shape}      | Expected: [batch_size, 512]"
-    )
-    print(
-        f"Attention Mask Shape: {test_batch['attention_mask'].shape} | Expected: [batch_size, 512]"
-    )
-    print(
-        f"Labels Shape:         {test_batch['label'].shape}          | Expected: [batch_size]"
-    )
-    print(
-        f"Input IDs Data Type:  {test_batch['input_ids'].dtype}     | Expected: torch.int64"
-    )
-    print(
-        f"Labels Data Type:     {test_batch['label'].dtype}        | Expected: torch.int64"
-    )
-    print("---------------------------------\n")
-
-
-def test_vram_state_machine():
-    print("\n[SYSTEM] Initializing Model & VRAM State Machine Test...")
-
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"[HARDWARE] Active Compute Device: {device.type.upper()}")
-
-    if device.type == "cuda":
-        print(f"[HARDWARE] GPU Name: {torch.cuda.get_device_name(0)}")
-        print(
-            f"[VRAM] Initial Allocation: {torch.cuda.memory_allocated() / (1024**2):.2f} MB"
-        )
-
-    tokenizer = AutoTokenizer.from_pretrained("distilgpt2")
-    tokenizer.pad_token = tokenizer.eos_token
-
-    print("[SYSTEM] Loading DistilGPT-2 with Sequence Classification Head...")
-    model = AutoModelForSequenceClassification.from_pretrained(
-        "distilgpt2", num_labels=2
-    )
-    model.config.pad_token_id = tokenizer.pad_token_id
-    model = model.to(device)
-
-    if device.type == "cuda":
-        print(
-            f"[VRAM] Post-Model Load Allocation: {torch.cuda.memory_allocated() / (1024**2):.2f} MB"
-        )
-
-    print("[SYSTEM] Executing VRAM State Machine Teardown Sequence...")
-    del model
-    gc.collect()
-    if device.type == "cuda":
-        torch.cuda.empty_cache()
-        print(
-            f"[VRAM] Post-Purge Allocation: {torch.cuda.memory_allocated() / (1024**2):.2f} MB (Target: ~0.00 MB)"
-        )
-
-    print("[SUCCESS] VRAM State Machine cycle completed cleanly.")
-
-
-def train_critic(
-    epochs=2, batch_size=8, lr=5e-5, output_dir="masteries/coding/artifacts/critic_v1"
-):
-
-    print(f"\n[SYSTEM] Initializing PACE Critic Training Pipeline ({epochs} Epochs)...")
-
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print(f"[HARDWARE] Training execution locked to: {device.type.upper()}")
-
-    train_loader, tokenizer = get_critic_dataloader(
-        parquet_path="masteries/coding/data/raw/critic_raw_deletions.parquet",
-        batch_size=batch_size,
-        shuffle=True,
-    )
+    # ==========================================
+    # 3. NEURAL NETWORK SETUP
+    # ==========================================
+    print("Loading 125M Parameter Critic Model to GPU...")
 
     model = AutoModelForSequenceClassification.from_pretrained(
-        "distilgpt2", num_labels=2
-    )
-    model.config.pad_token_id = tokenizer.pad_token_id
-    model = model.to(device)
+        model_name, num_labels=2
+    ).to(device)
 
-    optimizer = torch.optim.AdamW(model.parameters(), lr=lr)
+    # Differential learning rates: smaller for pre-trained backbone, larger for random head
+    optimizer = AdamW(
+        [
+            {"params": model.roberta.parameters(), "lr": 2e-5},
+            {"params": model.classifier.parameters(), "lr": 1e-3},
+        ],
+        weight_decay=0.01,
+    )
+
+    # ==========================================
+    # 4. THE FULL TRAINING LOOP
+    # ==========================================
+    epochs = 5
+    accumulation_steps = 4
+    save_dir = "masteries/coding/models/critic_v4"
+
+    num_training_steps = epochs * (len(train_loader) // accumulation_steps)
+    lr_scheduler = get_cosine_schedule_with_warmup(
+        optimizer=optimizer,
+        num_warmup_steps=int(0.1 * num_training_steps),
+        num_training_steps=num_training_steps,
+    )
+
+    print(f"Starting Critic Training Loop for {epochs} Epoch(s)...")
+
+    best_val_acc = 0.0
 
     for epoch in range(epochs):
-        print(f"\n---> STARTING EPOCH {epoch + 1}/{epochs} <---")
+
         model.train()
+        progress_bar = tqdm(train_loader, desc=f"Epoch {epoch + 1}/{epochs} [Train]")
+        total_loss = 0
+        optimizer.zero_grad()
 
-        total_train_loss = 0.0
+        for batch_idx, batch in enumerate(progress_bar):
 
-        for step, batch in enumerate(train_loader):
             input_ids = batch["input_ids"].to(device)
-            attention_mask = batch["attention_mask"].to(device)
             labels = batch["label"].to(device)
+            attention_mask = batch["attention_mask"].to(device)
 
-            optimizer.zero_grad()
             outputs = model(
                 input_ids=input_ids, attention_mask=attention_mask, labels=labels
             )
-            loss = outputs.loss
-
+            loss = outputs.loss / accumulation_steps
             loss.backward()
-            optimizer.step()
 
-            total_train_loss += loss.item()
+            if (batch_idx + 1) % accumulation_steps == 0 or (batch_idx + 1) == len(
+                train_loader
+            ):
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+                optimizer.step()
+                lr_scheduler.step()
+                optimizer.zero_grad()
 
-            if step % 25 == 0:
-                print(
-                    f"[EPOCH {epoch + 1} | STEP {step:03d}/{len(train_loader)}] Current Batch Loss: {loss.item():.4f}"
+            current_loss = loss.item() * accumulation_steps
+            total_loss += current_loss
+            progress_bar.set_postfix({"loss": f"{current_loss:.4f}"})
+
+        avg_loss = total_loss / len(train_loader)
+
+        # Validation Phase
+        model.eval()
+        val_loss = 0
+        correct_preds = 0
+        total_preds = 0
+
+        val_progress = tqdm(val_loader, desc=f"Epoch {epoch + 1}/{epochs} [Val]")
+        with torch.no_grad():
+            for batch in val_progress:
+                input_ids = batch["input_ids"].to(device)
+                labels = batch["label"].to(device)
+                attention_mask = batch["attention_mask"].to(device)
+
+                outputs = model(
+                    input_ids=input_ids, attention_mask=attention_mask, labels=labels
                 )
+                val_loss += outputs.loss.item()
 
-        avg_epoch_loss = total_train_loss / len(train_loader)
-        print(f"---> EPOCH {epoch + 1} COMPLETE | Average Loss: {avg_epoch_loss:.4f}")
+                preds = torch.argmax(outputs.logits, dim=1)
+                correct_preds += (preds == labels).sum().item()
+                total_preds += labels.size(0)
 
-    print(f"\n[SYSTEM] Serializing trained Critic micro-model to: {output_dir}")
-    os.makedirs(output_dir, exist_ok=True)
-    model.save_pretrained(output_dir)
-    tokenizer.save_pretrained(output_dir)
-    print("[SUCCESS] Checkpoint saved! Micro-model ready for Actor-Critic loop.")
+        avg_val_loss = val_loss / len(val_loader)
+        val_acc = correct_preds / total_preds
 
-    del model, optimizer, train_loader
-    gc.collect()
-    if device.type == "cuda":
-        torch.cuda.empty_cache()
         print(
-            f"[VRAM] Pipeline Purged. Idling Context Footprint: {torch.cuda.memory_allocated() / (1024**2):.2f} MB"
+            f"\nEpoch {epoch + 1} completed. Train Loss: {avg_loss:.4f} | Val Loss: {avg_val_loss:.4f} | Val Acc: {val_acc:.4f}"
         )
 
+        # ==========================================
+        # 5. SAVE THE MODEL WEIGHTS
+        # ==========================================
+        if val_acc > best_val_acc:
+            print(
+                f"Validation accuracy improved from {best_val_acc:.4f} to {val_acc:.4f}."
+            )
+            best_val_acc = val_acc
 
-# =====================================================================
-# PRODUCTION ENTRY POINT
-# =====================================================================
+        epoch_save_dir = f"{save_dir}_epoch_{epoch+1}"
+        print(f"Saving model to {epoch_save_dir}...")
+        os.makedirs(epoch_save_dir, exist_ok=True)
+        model.save_pretrained(epoch_save_dir)
+        tokenizer.save_pretrained(epoch_save_dir)
+        print("Model saved successfully!")
+
+
 if __name__ == "__main__":
-    # --- Regression Test Suite (Uncomment to diagnose hardware/pipeline issues) ---
-    # test_data_pipeline()
-    # test_vram_state_machine()
-
-    # --- Production Training Execution ---
-    train_critic(
-        epochs=2,
-        batch_size=8,
-        lr=5e-5,
-        output_dir="masteries/coding/artifacts/critic_v1",
-    )
+    main()
