@@ -20,7 +20,48 @@ def health():
 
 @router.post("/predict", response_model=PredictResponse)
 def predict(request: PredictRequest):
-    return PredictResponse(prediction=f"You entered: {request.text}", status="success")
+    try:
+        from masteries.coding.inference.actor_generate import generate_fixes
+
+        fixes = generate_fixes(request.text, num_return_sequences=1)
+        return PredictResponse(prediction=fixes[0], status="success")
+    except Exception as e:
+        return PredictResponse(
+            prediction=f"[CPU Fallback] You entered: {request.text}\n\n(Error: {e})",
+            status="degraded",
+        )
+
+
+@router.post("/generate")
+def generate(request: PredictRequest):
+    """
+    Primary endpoint: accepts a text prompt from the frontend chat,
+    runs it through the Actor→Critic ensemble pipeline, and returns
+    the best candidate code. Falls back to a stub echo when GPU
+    inference modules are not available (e.g. no CUDA).
+    """
+    try:
+        from masteries.coding.inference.v3_orchestrator import v3_pipeline
+
+        result = v3_pipeline(request.text)
+        return {
+            "response": result,
+            "source": "actor-critic-ensemble",
+            "status": "success",
+        }
+    except Exception as e:
+        # Graceful fallback when models are not loaded / no GPU
+        return {
+            "response": (
+                f"[PACE Engine — CPU Fallback]\n\n"
+                f"Your prompt was received:\n```\n{request.text}\n```\n\n"
+                f"The Actor-Critic ensemble requires a CUDA-capable GPU. "
+                f"Running in echo-mode.\n\n"
+                f"(Debug: {type(e).__name__}: {e})"
+            ),
+            "source": "fallback",
+            "status": "degraded",
+        }
 
 
 UPLOAD_DIR = Path("uploads")
@@ -48,9 +89,5 @@ async def upload_pdf(file: UploadFile = File(...)):
         "pages": pages,
         "characters": len(text),
         "chunks": len(chunks),
-        "preview": chunks[0],
+        "preview": chunks[0] if chunks else "",
     }
-
-
-# Later, you'll simply replace the dummy logic with a call to Stream A's AI model:
-# prediction = actor_model.generate(request.text)

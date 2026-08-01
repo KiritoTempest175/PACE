@@ -7,8 +7,7 @@ def chunk_text(text: str, chunk_size: int = 1000):
     return chunks
 
 
-text = "Hello " * 500
-
-chunks = chunk_text(text)
-
-print(len(chunks))
+if __name__ == "__main__":
+    text = "Hello " * 500
+    chunks = chunk_text(text)
+    print(len(chunks))

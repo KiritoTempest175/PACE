@@ -24,9 +24,7 @@ def generate_fixes(
     inputs = tokenizer(
         prompt,
         return_tensors="pt",
-        max_length=512,
         truncation=True,
-        padding="max_length",
     )
     inputs = {k: v.to(device) for k, v in inputs.items()}
 
@@ -55,5 +53,5 @@ def generate_fixes(
 
 if __name__ == "__main__":
     print("[SYSTEM] Testing Actor Inference Engine...")
-    test_prompt = "def calculate_sum(a, b):"
+    test_prompt = "def linear_search(arr):"
     print(generate_fixes(test_prompt, num_return_sequences=1))

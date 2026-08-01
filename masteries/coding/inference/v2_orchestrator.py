@@ -2,6 +2,7 @@ import torch
 import gc
 import sys
 import os
+import re
 
 # Add parent dir to path to import utils
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "../../..")))
@@ -12,6 +13,33 @@ from transformers import (
     AutoModelForCausalLM,
     AutoModelForSequenceClassification,
 )
+
+
+def format_actor_prompt(raw_prompt: str) -> str:
+    """
+    Wraps raw user English into a strict Python signature to anchor the SLM token generation.
+    """
+    raw_lower = raw_prompt.lower().strip()
+
+    # 1. Known algorithm signatures for reliable zero-shot completions
+    signatures = {
+        "linear search": 'def linear_search(arr, target):\n    """\n    Search for target in arr and return the index. Return -1 if not found.\n    """\n',
+        "binary search": 'def binary_search(arr, target):\n    """\n    Perform binary search on a sorted list arr to find the target.\n    """\n',
+        "fibonacci": 'def fibonacci(n):\n    """\n    Calculate the nth Fibonacci number iteratively.\n    """\n',
+        "bubble sort": 'def bubble_sort(arr):\n    """\n    Sort the array in place using bubble sort.\n    """\n',
+    }
+
+    for key, signature in signatures.items():
+        if key in raw_lower:
+            return signature
+
+    # 2. Dynamic Fallback for unlisted prompts
+    safe_func_name = re.sub(r"[^a-z0-9]+", "_", raw_lower).strip("_")
+    if not safe_func_name or safe_func_name[0].isdigit():
+        safe_func_name = "func_" + safe_func_name
+
+    return f'def {safe_func_name}():\n    """\n    {raw_prompt}\n    """\n'
+
 
 # ==========================================
 # HARDWARE SETTINGS
@@ -55,7 +83,9 @@ def v2_pipeline_best_of_n(user_prompt):
     # PHASE 1: ACTOR GENERATION (N Candidates)
     # ----------------------------------------
     actor_tok, actor_mod = load_actor()
-    inputs = actor_tok(user_prompt, return_tensors="pt").to(device)
+
+    anchored_prompt = format_actor_prompt(user_prompt)
+    inputs = actor_tok(anchored_prompt, return_tensors="pt").to(device)
 
     print("\n[PHASE 1] Generating Candidates...")
     for i in range(1, N_CANDIDATES + 1):
@@ -69,7 +99,7 @@ def v2_pipeline_best_of_n(user_prompt):
             eos_token_id=actor_tok.eos_token_id,
         )
         generated_code = actor_tok.decode(outputs[0], skip_special_tokens=True)
-        generated_code = generated_code.replace(user_prompt, "").strip()
+        generated_code = generated_code.replace(anchored_prompt, "").strip()
         candidates.append(generated_code)
         print(f"Candidate {i} generated.")
 
@@ -108,13 +138,13 @@ def v2_pipeline_best_of_n(user_prompt):
     # PHASE 3: SELECTION
     # ----------------------------------------
     if best_score > BUG_THRESHOLD:
-        print("\n⚠️ [WARNING: High Risk Code]")
+        print("\n[WARNING: High Risk Code]")
         print(
             f"All {N_CANDIDATES} candidates exceeded bug threshold. Returning safest option (Score: {best_score:.4f})."
         )
         return f"# [WARNING: High Risk Code - Bug Prob: {best_score:.4f}]\n{best_code}"
     else:
-        print(f"\n✅ [SUCCESS] Returning best candidate (Score: {best_score:.4f}).")
+        print(f"\n[SUCCESS] Returning best candidate (Score: {best_score:.4f}).")
         return best_code
 
 
@@ -122,7 +152,7 @@ if __name__ == "__main__":
     test_prompt = "def fibonacci(n):"
     final_output = v2_pipeline_best_of_n(test_prompt)
 
-    print("\n\n🏆 FINAL SYSTEM OUTPUT 🏆")
+    print("\n\n[FINAL SYSTEM OUTPUT]")
     print("-----------------------------------")
     print(final_output)
     print("-----------------------------------")

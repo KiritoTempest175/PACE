@@ -485,3 +485,9 @@ footer { border-top: 1px solid var(--border-subtle); background: var(--bg-card);
   .composer { height: 48px; border-radius: 16px; }
   .composer input { font-size: 12px; }
 }
+
+/* ============================================
+   LOADING SPINNER
+   ============================================ */
+@keyframes spin { to { transform: rotate(360deg); } }
+.spin-icon { animation: spin 1s linear infinite; display: inline-block; vertical-align: middle; }

@@ -2,6 +2,8 @@ import { useMemo, useState } from 'react'
 import { HashRouter, Link, Route, Routes, useNavigate } from 'react-router-dom'
 import { ThemeProvider, useTheme } from './ThemeContext'
 
+const API_BASE = '/api'
+
 const Icon = ({ name, size = 22 }) => {
   const common = {
     width: size,
@@ -33,6 +35,7 @@ const Icon = ({ name, size = 22 }) => {
     check: <svg {...common}><path d="m5 12 4 4L19 6"/></svg>,
     bolt: <svg {...common}><path d="m13 2-9 12h7l-1 8 9-12h-7z"/></svg>,
     shield: <svg {...common}><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/><path d="m9 12 2 2 4-4"/></svg>,
+    loader: <svg {...common} className="spin-icon"><circle cx="12" cy="12" r="10" strokeDasharray="50" strokeDashoffset="15"/></svg>,
   }
 
   return icons[name] ?? null
@@ -59,7 +62,21 @@ function ThemeToggle({ size = 20 }) {
   )
 }
 
+function StatusDot({ status }) {
+  const color = status === 'connected' ? 'var(--accent-green)' : status === 'checking' ? 'orange' : '#ff4444'
+  return <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: '50%', background: color, marginRight: 6 }} />
+}
+
 function HomePage() {
+  const [backendStatus, setBackendStatus] = useState('checking')
+
+  useState(() => {
+    fetch(`${API_BASE}/health`)
+      .then((r) => r.json())
+      .then((d) => setBackendStatus(d.status === 'healthy' ? 'connected' : 'error'))
+      .catch(() => setBackendStatus('error'))
+  })
+
   return (
     <div className="app-shell">
       <header className="topbar">
@@ -67,7 +84,13 @@ function HomePage() {
           <span className="brand-mark"><Icon name="terminal" size={20} /></span>
           <span>PACE</span>
         </a>
-        <ThemeToggle />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span style={{ fontSize: 11, color: 'var(--text-dim)', display: 'flex', alignItems: 'center' }}>
+            <StatusDot status={backendStatus} />
+            {backendStatus === 'connected' ? 'Backend online' : backendStatus === 'checking' ? 'Connecting…' : 'Backend offline'}
+          </span>
+          <ThemeToggle />
+        </div>
       </header>
 
       <main id="top">
@@ -122,15 +145,47 @@ function MasteryPage({ type }) {
   const mode = modes[type]
   const [input, setInput] = useState('')
   const [messages, setMessages] = useState([])
+  const [loading, setLoading] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const renderedWelcome = useMemo(() => mode.welcome.replaceAll('**', ''), [mode.welcome])
 
-  const submit = (event) => {
+  const submit = async (event) => {
     event.preventDefault()
     const value = input.trim()
-    if (!value) return
-    setMessages((items) => [...items, value])
+    if (!value || loading) return
+
+    // Add user message
+    setMessages((prev) => [...prev, { role: 'user', text: value }])
     setInput('')
+    setLoading(true)
+
+    try {
+      const res = await fetch(`${API_BASE}/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: value }),
+      })
+      const data = await res.json()
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: 'assistant',
+          text: data.response,
+          source: data.source || 'unknown',
+        },
+      ])
+    } catch (err) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: 'assistant',
+          text: `⚠️ Could not reach backend.\n\nMake sure the FastAPI server is running on port 8000.\n\n(${err.message})`,
+          source: 'error',
+        },
+      ])
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -175,15 +230,39 @@ function MasteryPage({ type }) {
             </div>
           </div>
 
-          {messages.map((message, index) => (
-            <div className="user-message" key={`${message}-${index}`}>{message}</div>
-          ))}
+          {messages.map((msg, index) =>
+            msg.role === 'user' ? (
+              <div className="user-message" key={`msg-${index}`}>{msg.text}</div>
+            ) : (
+              <div className="assistant-message" key={`msg-${index}`}>
+                <div className="assistant-avatar"><Icon name="chip" size={19}/></div>
+                <div>
+                  <pre style={{ margin: 0, whiteSpace: 'pre-wrap', fontFamily: 'inherit', fontSize: 14, lineHeight: 1.55, fontWeight: 600 }}>{msg.text}</pre>
+                  <span className="validated">
+                    <Icon name="check" size={13}/>
+                    {msg.source === 'actor-critic-ensemble' ? 'Critic Validated' : msg.source === 'error' ? 'Connection Error' : 'Fallback Mode'}
+                  </span>
+                </div>
+              </div>
+            )
+          )}
+
+          {loading && (
+            <div className="assistant-message">
+              <div className="assistant-avatar"><Icon name="chip" size={19}/></div>
+              <div>
+                <p style={{ color: 'var(--text-dim)' }}>
+                  <Icon name="loader" size={14} /> Processing through Actor-Critic pipeline…
+                </p>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="composer-wrap">
           <form className="composer" onSubmit={submit}>
-            <input value={input} onChange={(event) => setInput(event.target.value)} placeholder={mode.placeholder} aria-label={mode.placeholder}/>
-            <button type="submit" aria-label="Send message"><Icon name="send" size={20}/></button>
+            <input value={input} onChange={(event) => setInput(event.target.value)} placeholder={mode.placeholder} aria-label={mode.placeholder} disabled={loading}/>
+            <button type="submit" aria-label="Send message" disabled={loading}><Icon name="send" size={20}/></button>
           </form>
           <p>PACE Engine running locally. Verify critical outputs.</p>
         </div>
