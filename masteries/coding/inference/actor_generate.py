@@ -52,6 +52,6 @@ def generate_fixes(
 
 
 if __name__ == "__main__":
-    print("[SYSTEM] Testing Actor Inference Engine...")
+    print("[SYSTEM] Testing Actor Inference Engine")
     test_prompt = "def linear_search(arr):"
     print(generate_fixes(test_prompt, num_return_sequences=1))
