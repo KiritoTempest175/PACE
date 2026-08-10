@@ -20,7 +20,7 @@ export function Sidebar({ collapsed, setCollapsed, mobileOpen, setMobileOpen, on
   const location = useLocation()
   const navigate = useNavigate()
 
-  // ChatGPT-style Chat History list grouped by recency
+  // ChatGPT-style Chat History list (Today's conversations only)
   const [chatHistory, setChatHistory] = useState([
     {
       id: 'chat-1',
@@ -34,34 +34,6 @@ export function Sidebar({ collapsed, setCollapsed, mobileOpen, setMobileOpen, on
       title: 'Custom React Debounce Hook',
       workspace: 'coding',
       group: 'Today',
-      icon: Code2,
-    },
-    {
-      id: 'chat-3',
-      title: 'Technical Spec RFC Executive Brief',
-      workspace: 'literacy',
-      group: 'Yesterday',
-      icon: BookOpen,
-    },
-    {
-      id: 'chat-4',
-      title: 'KV Cache Compression Benchmark',
-      workspace: 'research',
-      group: 'Yesterday',
-      icon: Globe2,
-    },
-    {
-      id: 'chat-5',
-      title: 'Perplexity AWQ vs GGUF Analysis',
-      workspace: 'research',
-      group: 'Previous 7 Days',
-      icon: Globe2,
-    },
-    {
-      id: 'chat-6',
-      title: 'SQL Query Optimization 10M Rows',
-      workspace: 'coding',
-      group: 'Previous 7 Days',
       icon: Code2,
     },
   ])
@@ -87,8 +59,8 @@ export function Sidebar({ collapsed, setCollapsed, mobileOpen, setMobileOpen, on
     navigate(`/${chat.workspace}`)
   }
 
-  // Group history items by time group
-  const groups = ['Today', 'Yesterday', 'Previous 7 Days']
+  // Group history items by time group (Today only)
+  const groups = ['Today']
 
   return (
     <>

@@ -6,7 +6,6 @@ import { TopNav } from './components/TopNav'
 import { QuickActions } from './components/QuickActions'
 import { WorkspaceCard } from './components/WorkspaceCard'
 import { HardwareMonitor } from './components/HardwareMonitor'
-import { ActivityTimeline } from './components/ActivityTimeline'
 import { RecentChats } from './components/RecentChats'
 import { SearchModal } from './components/SearchModal'
 import { SettingsModal } from './components/SettingsModal'
@@ -90,11 +89,8 @@ function DashboardHome() {
         </div>
       </section>
 
-      {/* Hardware Telemetry Monitor & Activity Feed */}
-      <div className="dashboard-grid-split">
-        <HardwareMonitor />
-        <ActivityTimeline />
-      </div>
+      {/* Hardware Telemetry Monitor */}
+      <HardwareMonitor />
 
       {/* Recent Chat Sessions */}
       <RecentChats />
