@@ -8,39 +8,16 @@ from transformers import AutoTokenizer, AutoModelForCausalLM
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # Model Paths
-# Using the standard Actor model from V1/V2 and the new Qwen 3B model as the Critic
-ACTOR_PATH = "masteries/coding/models/actor_v1"
+# Using the alternative Actor model and the new Qwen 3B model as the Critic
 CRITIC_PATH = "Qwen/Qwen2.5-3B-Instruct"
+
+from masteries.coding.training.actor.alt_actor_model import ActorModel
 
 
 def flush_vram():
     """Forces PyTorch to release memory back to the OS."""
     gc.collect()
     torch.cuda.empty_cache()
-
-
-def load_actor():
-    print("\n[VRAM] Loading Actor Model...")
-    # Add error handling in case actor_v1 isn't fully downloaded in this env
-    try:
-        tokenizer = AutoTokenizer.from_pretrained(ACTOR_PATH)
-        model = AutoModelForCausalLM.from_pretrained(
-            ACTOR_PATH,
-            torch_dtype=torch.float16 if device.type == "cuda" else torch.float32,
-        )
-        model.to(device)
-        return tokenizer, model
-    except Exception as e:
-        print(
-            f"[WARNING] Could not load Actor from {ACTOR_PATH}. Using Qwen 3B as Actor fallback for testing: {e}"
-        )
-        tokenizer = AutoTokenizer.from_pretrained(CRITIC_PATH)
-        model = AutoModelForCausalLM.from_pretrained(
-            CRITIC_PATH,
-            torch_dtype=torch.float16 if device.type == "cuda" else torch.float32,
-        )
-        model.to(device)
-        return tokenizer, model
 
 
 def load_critic():
@@ -52,6 +29,10 @@ def load_critic():
     )
     model.to(device)
     return tokenizer, model
+
+
+from transformers import TextIteratorStreamer
+from threading import Thread
 
 
 def generate_text(tokenizer, model, system_msg, user_msg, max_tokens=1024):
@@ -74,21 +55,23 @@ def generate_text(tokenizer, model, system_msg, user_msg, max_tokens=1024):
 
     model_inputs = tokenizer([text], return_tensors="pt").to(device)
 
-    with torch.no_grad():
-        generated_ids = model.generate(
-            **model_inputs,
-            max_new_tokens=max_tokens,
-            do_sample=True,
-            temperature=0.3,
-        )
+    streamer = TextIteratorStreamer(
+        tokenizer, skip_prompt=True, skip_special_tokens=True
+    )
 
-    generated_ids = [
-        output_ids[len(input_ids) :]
-        for input_ids, output_ids in zip(model_inputs.input_ids, generated_ids)
-    ]
+    generation_kwargs = dict(
+        **model_inputs,
+        max_new_tokens=max_tokens,
+        do_sample=True,
+        temperature=0.3,
+        streamer=streamer,
+    )
 
-    response = tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0]
-    return response
+    thread = Thread(target=model.generate, kwargs=generation_kwargs)
+    thread.start()
+
+    for new_text in streamer:
+        yield new_text
 
 
 def v3_pipeline(user_prompt, max_iterations=3):
@@ -109,9 +92,13 @@ def v3_pipeline(user_prompt, max_iterations=3):
     )
 
     print("\n[CRITIC] Generating detailed prompt for Actor...")
-    actor_instructions = generate_text(
+    yield {"type": "status", "content": "Critic analyzing requirements..."}
+    actor_instructions_chunks = []
+    for chunk in generate_text(
         critic_tok, critic_mod, sys_expand, usr_expand, max_tokens=512
-    )
+    ):
+        actor_instructions_chunks.append(chunk)
+    actor_instructions = "".join(actor_instructions_chunks)
     print(
         f"\n--- Critic's Expanded Prompt ---\n{actor_instructions}\n--------------------------------"
     )
@@ -122,20 +109,21 @@ def v3_pipeline(user_prompt, max_iterations=3):
     # ---------------------------------------------------------
     # PHASE 2: Actor Generates Initial Code
     # ---------------------------------------------------------
-    actor_tok, actor_mod = load_actor()
-
-    sys_actor = "You are an expert Python Developer. You follow instructions perfectly."
-    usr_actor = actor_instructions
+    actor = ActorModel(device="cuda" if torch.cuda.is_available() else "cpu")
 
     print("\n[ACTOR] Generating initial code (incorporating reasoning in comments)...")
-    current_code = generate_text(
-        actor_tok, actor_mod, sys_actor, usr_actor, max_tokens=1024
-    )
+    yield {"type": "status", "content": "Actor writing initial code..."}
+    yield {"type": "clear"}
+    current_code_chunks = []
+    for chunk in actor.generate_code(actor_instructions):
+        current_code_chunks.append(chunk)
+        yield {"type": "token", "content": chunk}
+    current_code = "".join(current_code_chunks)
     print(
         f"\n--- Actor's Initial Code ---\n{current_code}\n----------------------------"
     )
 
-    del actor_tok, actor_mod
+    del actor
     flush_vram()
 
     # ---------------------------------------------------------
@@ -144,6 +132,10 @@ def v3_pipeline(user_prompt, max_iterations=3):
     iteration = 1
     while iteration <= max_iterations:
         print(f"\n=== REFINEMENT ITERATION {iteration} ===")
+        yield {
+            "type": "status",
+            "content": f"Iteration {iteration}: Critic evaluating code...",
+        }
 
         # Load Critic
         critic_tok, critic_mod = load_critic()
@@ -158,9 +150,12 @@ def v3_pipeline(user_prompt, max_iterations=3):
         )
 
         print("\n[CRITIC] Evaluating code...")
-        critic_feedback = generate_text(
+        critic_feedback_chunks = []
+        for chunk in generate_text(
             critic_tok, critic_mod, sys_eval, usr_eval, max_tokens=512
-        )
+        ):
+            critic_feedback_chunks.append(chunk)
+        critic_feedback = "".join(critic_feedback_chunks)
         print(
             f"\n--- Critic's Feedback ---\n{critic_feedback}\n-------------------------"
         )
@@ -171,12 +166,17 @@ def v3_pipeline(user_prompt, max_iterations=3):
         # Check if the Critic approved the code (strict check)
         if critic_feedback.strip().upper().startswith("CODE_IS_PERFECT"):
             print("\n[SUCCESS] Critic approved the code!")
+            yield {"type": "status", "content": "Critic approved the code!"}
             break
 
         if iteration == max_iterations:
             print(
                 "\n[WARNING] Max iterations reached without Critic approval. Using Critic for final fallback."
             )
+            yield {
+                "type": "status",
+                "content": "Max iterations reached. Critic fallback...",
+            }
 
             # Use Critic to generate correct code
             sys_final = "You are an expert Python Developer."
@@ -184,9 +184,14 @@ def v3_pipeline(user_prompt, max_iterations=3):
 
             print("\n[CRITIC] Generating correct code for continuous learning...")
             critic_tok, critic_mod = load_critic()
-            critic_correct_code = generate_text(
+            yield {"type": "clear"}
+            critic_correct_code_chunks = []
+            for chunk in generate_text(
                 critic_tok, critic_mod, sys_final, usr_final, max_tokens=1024
-            )
+            ):
+                critic_correct_code_chunks.append(chunk)
+                yield {"type": "token", "content": chunk}
+            critic_correct_code = "".join(critic_correct_code_chunks)
 
             del critic_tok, critic_mod
             flush_vram()
@@ -219,38 +224,40 @@ def v3_pipeline(user_prompt, max_iterations=3):
             break
 
         # Load Actor for Refinement
-        actor_tok, actor_mod = load_actor()
-
-        sys_refine = "You are an expert Python Developer."
-        usr_refine = (
-            f"You previously wrote this code for the task '{user_prompt}':\n```python\n{current_code}\n```\n\n"
-            f"An expert Code Critic reviewed it and provided this feedback:\n{critic_feedback}\n\n"
-            f"Please rewrite the code completely to address ALL of the critic's feedback. "
-            f"Remember to include your logic reasoning in comments to avoid loopholes before writing the code."
-        )
+        actor = ActorModel(device="cuda" if torch.cuda.is_available() else "cpu")
 
         print("\n[ACTOR] Refining code based on Critic's feedback...")
-        current_code = generate_text(
-            actor_tok, actor_mod, sys_refine, usr_refine, max_tokens=1024
-        )
+        yield {
+            "type": "status",
+            "content": f"Iteration {iteration}: Actor refining code...",
+        }
+        yield {"type": "clear"}
+        current_code_chunks = []
+        for chunk in actor.revise_code(user_prompt, current_code, critic_feedback):
+            current_code_chunks.append(chunk)
+            yield {"type": "token", "content": chunk}
+        current_code = "".join(current_code_chunks)
+
         print(
             f"\n--- Actor's Refined Code ---\n{current_code}\n----------------------------"
         )
 
-        del actor_tok, actor_mod
+        del actor
         flush_vram()
 
         iteration += 1
 
     print("\n\n==========================================")
-    print(" 🏆 FINAL ENSEMBLE OUTPUT")
+    print(" [SUCCESS] FINAL ENSEMBLE OUTPUT")
     print("==========================================")
     print(current_code)
     print("==========================================")
 
-    return current_code
-
 
 if __name__ == "__main__":
     test_user_prompt = "Write a Python code to search 19 in this array 10,16,19,30,41,52. use linear search and return index number."
-    v3_pipeline(test_user_prompt)
+    for event in v3_pipeline(test_user_prompt):
+        if event["type"] == "token":
+            print(event["content"], end="", flush=True)
+        elif event["type"] == "status":
+            print("\n[" + event["content"] + "]")

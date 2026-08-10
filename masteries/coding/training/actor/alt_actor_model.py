@@ -1,5 +1,6 @@
 import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer, TextStreamer
+from transformers import AutoModelForCausalLM, AutoTokenizer, TextIteratorStreamer
+from threading import Thread
 
 
 class ActorModel:
@@ -57,28 +58,23 @@ class ActorModel:
         model_inputs = self.tokenizer([text], return_tensors="pt").to(self.device)
 
         # Add a streamer to see the output generated in real-time
-        streamer = TextStreamer(
+        streamer = TextIteratorStreamer(
             self.tokenizer, skip_prompt=True, skip_special_tokens=True
         )
 
-        with torch.no_grad():
-            generated_ids = self.model.generate(
-                **model_inputs,
-                max_new_tokens=1024,
-                do_sample=True,
-                temperature=0.7,
-                streamer=streamer,
-            )
+        generation_kwargs = dict(
+            **model_inputs,
+            max_new_tokens=1024,
+            do_sample=True,
+            temperature=0.7,
+            streamer=streamer,
+        )
 
-        generated_ids = [
-            output_ids[len(input_ids) :]
-            for input_ids, output_ids in zip(model_inputs.input_ids, generated_ids)
-        ]
+        thread = Thread(target=self.model.generate, kwargs=generation_kwargs)
+        thread.start()
 
-        response = self.tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[
-            0
-        ]
-        return response
+        for new_text in streamer:
+            yield new_text
 
     def revise_code(self, prompt: str, original_code: str, critique: str) -> str:
         """
@@ -118,28 +114,23 @@ class ActorModel:
         model_inputs = self.tokenizer([text], return_tensors="pt").to(self.device)
 
         # Add a streamer to see the output generated in real-time
-        streamer = TextStreamer(
+        streamer = TextIteratorStreamer(
             self.tokenizer, skip_prompt=True, skip_special_tokens=True
         )
 
-        with torch.no_grad():
-            generated_ids = self.model.generate(
-                **model_inputs,
-                max_new_tokens=1024,
-                do_sample=True,
-                temperature=0.5,  # Lower temperature for revision to keep it focused
-                streamer=streamer,
-            )
+        generation_kwargs = dict(
+            **model_inputs,
+            max_new_tokens=1024,
+            do_sample=True,
+            temperature=0.5,  # Lower temperature for revision to keep it focused
+            streamer=streamer,
+        )
 
-        generated_ids = [
-            output_ids[len(input_ids) :]
-            for input_ids, output_ids in zip(model_inputs.input_ids, generated_ids)
-        ]
+        thread = Thread(target=self.model.generate, kwargs=generation_kwargs)
+        thread.start()
 
-        response = self.tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[
-            0
-        ]
-        return response
+        for new_text in streamer:
+            yield new_text
 
 
 if __name__ == "__main__":

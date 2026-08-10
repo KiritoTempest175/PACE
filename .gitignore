@@ -60,3 +60,5 @@ masteries/coding/artifacts/
 *.bin
 masteries/coding/models/
 UNATTENDED_RUN_REPORT.md
+node_modules/ 
+ 

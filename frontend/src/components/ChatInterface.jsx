@@ -115,9 +115,23 @@ export function ChatInterface({ type }) {
     const value = textToSubmit.trim()
     if (!value || loading) return
 
-    setMessages((prev) => [...prev, { role: 'user', text: value }])
+    const messageId = Date.now()
+
+    setMessages((prev) => [...prev, { id: messageId, role: 'user', text: value }])
     setInput('')
     setLoading(true)
+
+    // Add empty assistant message that we will stream into
+    setMessages((prev) => [
+      ...prev,
+      {
+        id: messageId + 1,
+        role: 'assistant',
+        text: '',
+        status: 'Starting pipeline...',
+        source: 'actor-critic-ensemble',
+      },
+    ])
 
     try {
       const res = await fetch(`${API_BASE}/generate`, {
@@ -129,24 +143,78 @@ export function ChatInterface({ type }) {
           speed_mode: speedMode,
         }),
       })
-      const data = await res.json()
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: 'assistant',
-          text: data.response,
-          source: data.source || 'unknown',
-        },
-      ])
+
+      const reader = res.body.getReader()
+      const decoder = new TextDecoder('utf-8')
+      let done = false
+      let buffer = ''
+
+      while (!done) {
+        const { value: chunk, done: doneReading } = await reader.read()
+        done = doneReading
+
+        if (chunk) {
+          buffer += decoder.decode(chunk, { stream: true })
+          const lines = buffer.split('\n\n')
+          buffer = lines.pop() // keep the incomplete line in the buffer
+
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              const dataStr = line.slice(6)
+              try {
+                const data = JSON.parse(dataStr)
+
+                if (data.type === 'status') {
+                  setMessages((prev) =>
+                    prev.map(msg => msg.id === messageId + 1
+                      ? { ...msg, status: data.content }
+                      : msg
+                    )
+                  )
+                } else if (data.type === 'clear') {
+                  setMessages((prev) =>
+                    prev.map(msg => msg.id === messageId + 1
+                      ? { ...msg, text: '' }
+                      : msg
+                    )
+                  )
+                } else if (data.type === 'token') {
+                  setMessages((prev) =>
+                    prev.map(msg => msg.id === messageId + 1
+                      ? { ...msg, text: msg.text + data.content }
+                      : msg
+                    )
+                  )
+                } else if (data.type === 'error') {
+                  setMessages((prev) =>
+                    prev.map(msg => msg.id === messageId + 1
+                      ? { ...msg, text: data.content, source: 'error', status: 'Error' }
+                      : msg
+                    )
+                  )
+                } else if (data.type === 'done') {
+                  // Done event
+                  setMessages((prev) =>
+                    prev.map(msg => msg.id === messageId + 1
+                      ? { ...msg, status: 'Critic Validated' }
+                      : msg
+                    )
+                  )
+                }
+              } catch (e) {
+                console.error("Error parsing JSON:", e, "Data:", dataStr)
+              }
+            }
+          }
+        }
+      }
     } catch (err) {
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: 'assistant',
-          text: `⚠️ Could not reach local backend.\n\nMake sure the FastAPI server is running on port 8000.\n\n(${err.message})`,
-          source: 'error',
-        },
-      ])
+      setMessages((prev) =>
+        prev.map(msg => msg.id === messageId + 1
+          ? { ...msg, text: `⚠️ Could not reach local backend.\n\n(${err.message})`, source: 'error', status: 'Connection Failed' }
+          : msg
+        )
+      )
     } finally {
       setLoading(false)
     }
@@ -277,7 +345,11 @@ export function ChatInterface({ type }) {
             <div className="msg-row" key={`msg-${index}`}>
               <div className="assistant-msg-box">
                 <div className="assistant-avatar-box">
-                  <Cpu size={18} />
+                  {loading && index === messages.length - 1 ? (
+                    <Loader2 size={18} className="spin" style={{ animation: 'spin-shimmer 2s infinite linear' }} />
+                  ) : (
+                    <Cpu size={18} />
+                  )}
                 </div>
                 <div className="assistant-content-wrap">
                   <pre className="assistant-text-content" style={{ fontFamily: 'var(--font-mono)' }}>
@@ -285,9 +357,13 @@ export function ChatInterface({ type }) {
                   </pre>
                   <div className="assistant-meta-bar">
                     <span className="critic-validated-badge">
-                      <Check size={13} />
+                      {loading && index === messages.length - 1 ? (
+                        <Loader2 size={13} className="spin" />
+                      ) : (
+                        <Check size={13} />
+                      )}
                       {msg.source === 'actor-critic-ensemble'
-                        ? 'Critic Validated'
+                        ? (msg.status || 'Critic Validated')
                         : msg.source === 'error'
                         ? 'Connection Error'
                         : 'Fallback Mode'}
@@ -307,22 +383,7 @@ export function ChatInterface({ type }) {
           )
         )}
 
-        {/* Loading Shimmer State */}
-        {loading && (
-          <div className="msg-row">
-            <div className="assistant-msg-box">
-              <div className="assistant-avatar-box" style={{ animation: 'spin-shimmer 2s infinite linear' }}>
-                <Loader2 size={18} className="spin" />
-              </div>
-              <div className="assistant-content-wrap" style={{ minWidth: '280px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--text-secondary)' }}>
-                  <Loader2 size={16} className="spin" />
-                  <span style={{ fontSize: '13px' }}>Executing Actor-Critic pipeline...</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+        {/* Loading Shimmer State Removed - Streaming handles this inline */}
 
         <div ref={messagesEndRef} />
 
