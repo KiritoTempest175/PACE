@@ -110,10 +110,16 @@ function MainLayout() {
   const [backendStatus, setBackendStatus] = useState('checking')
 
   useEffect(() => {
-    fetch(`${API_BASE}/health`)
-      .then((r) => r.json())
-      .then((d) => setBackendStatus(d.status === 'healthy' ? 'connected' : 'error'))
-      .catch(() => setBackendStatus('error'))
+    const checkHealth = () => {
+      fetch(`${API_BASE}/health`)
+        .then((r) => r.json())
+        .then((d) => setBackendStatus(d.status === 'healthy' ? 'connected' : 'error'))
+        .catch(() => setBackendStatus('error'))
+    }
+
+    checkHealth()
+    const interval = setInterval(checkHealth, 5000)
+    return () => clearInterval(interval)
   }, [])
 
   // Custom event listener to open search modal

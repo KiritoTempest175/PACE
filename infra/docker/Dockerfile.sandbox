@@ -1,0 +1,56 @@
+# ==============================================================================
+#  Dockerfile.sandbox — PACE Secure Code Execution Sandbox
+#  Stream B / Global Infrastructure
+#
+#  Builds a deliberately MINIMAL, network-isolated image for running
+#  untrusted LLM-generated code snippets against unit tests.
+#
+#  Security notes:
+#    - No network access at runtime (use --network none when running)
+#    - No GPU, no external binaries beyond python3 + stdlib
+#    - Runs as a non-root user (pace_sandbox)
+#    - Strict resource limits should be applied at runtime:
+#        docker run --network none --memory 256m --cpus 0.5 pace-sandbox
+#
+#  Build:
+#    docker build -f infra/docker/Dockerfile.sandbox -t pace-sandbox .
+#  Run (isolated):
+#    docker run --rm --network none --memory 256m --cpus 0.5 pace-sandbox
+# ==============================================================================
+
+# ── Minimal base ──────────────────────────────────────────────────────────────
+FROM python:3.11-slim AS sandbox
+
+LABEL maintainer="PACE Engineering Team"
+LABEL description="PACE Sandbox — Isolated execution environment for LLM-generated code"
+
+# Harden environment
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    # Disable .pth file loading (reduces attack surface)
+    PYTHONNOUSERSITE=1
+
+# ── No external system packages beyond the base ───────────────────────────────
+# (Intentionally minimal — do NOT add curl, wget, gcc, or network tools)
+
+# ── Create a non-root sandbox user ───────────────────────────────────────────
+RUN useradd --create-home --shell /bin/bash --uid 1001 pace_sandbox
+
+# ── Working directory ─────────────────────────────────────────────────────────
+WORKDIR /sandbox
+
+# ── Copy only the sandbox executor module ────────────────────────────────────
+COPY core/sandbox/executor.py /sandbox/executor.py
+
+# ── Ownership to non-root user ────────────────────────────────────────────────
+RUN chown -R pace_sandbox:pace_sandbox /sandbox
+
+# ── Switch to non-root user ───────────────────────────────────────────────────
+USER pace_sandbox
+
+# ── Expose nothing — sandbox should not receive inbound traffic ───────────────
+# (Communication happens via stdin/stdout when invoked by the backend)
+
+# ── Entry point: smoke-test by default ───────────────────────────────────────
+CMD ["python", "/sandbox/executor.py"]

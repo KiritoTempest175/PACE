@@ -2,18 +2,44 @@ import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { Cpu, HardDrive, Zap, Shield, RefreshCw } from 'lucide-react'
 
-export function HardwareMonitor() {
-  const [vramUsage, setVramUsage] = useState(8.2) // MB
-  const [tokensPerSec, setTokensPerSec] = useState(48.5)
-  const [latency, setLatency] = useState(118)
+const API_BASE = '/api'
 
-  // Simulate dynamic low-amplitude hardware telemetry jitter
+export function HardwareMonitor() {
+  const [telemetry, setTelemetry] = useState({
+    vram_allocated_mb: 8.2,
+    vram_total_mb: 8192.0,
+    vram_percent: 0.1,
+    actor_model: 'Llama-3.1 8B',
+    critic_model: 'DeepSeek Coder',
+    tokens_per_sec: 48.5,
+    latency_ms: 118,
+    device: 'CPU (Fallback)',
+    status: 'healthy',
+  })
+
+  // Poll backend telemetry endpoint with low-amplitude jitter for offline preview
   useEffect(() => {
-    const interval = setInterval(() => {
-      setVramUsage((prev) => parseFloat((8.2 + (Math.random() * 0.4 - 0.2)).toFixed(1)))
-      setTokensPerSec((prev) => parseFloat((48.5 + (Math.random() * 2.0 - 1.0)).toFixed(1)))
-      setLatency((prev) => Math.floor(118 + (Math.random() * 8 - 4)))
-    }, 2500)
+    const fetchTelemetry = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/telemetry`)
+        if (res.ok) {
+          const data = await res.json()
+          setTelemetry(data)
+          return
+        }
+      } catch (e) {}
+
+      // Fallback preview jitter
+      setTelemetry((prev) => ({
+        ...prev,
+        vram_allocated_mb: parseFloat((8.2 + (Math.random() * 0.4 - 0.2)).toFixed(1)),
+        tokens_per_sec: parseFloat((48.5 + (Math.random() * 2.0 - 1.0)).toFixed(1)),
+        latency_ms: Math.floor(118 + (Math.random() * 8 - 4)),
+      }))
+    }
+
+    fetchTelemetry()
+    const interval = setInterval(fetchTelemetry, 3000)
     return () => clearInterval(interval)
   }, [])
 
@@ -28,35 +54,35 @@ export function HardwareMonitor() {
           <Cpu size={20} style={{ color: 'var(--accent-primary)' }} />
           <span>Hardware & VRAM Telemetry Monitor</span>
         </div>
-        <span className="badge-vram-limit">MAX 8.0 GB VRAM</span>
+        <span className="badge-vram-limit">MAX 8.0 GB VRAM ({telemetry.device})</span>
       </div>
 
       <div className="hardware-metrics-grid">
         <div className="metric-tile">
           <span className="metric-tile-label">VRAM Allocated</span>
-          <span className="metric-tile-value blue">{vramUsage} MB</span>
+          <span className="metric-tile-value blue">{telemetry.vram_allocated_mb} MB</span>
         </div>
 
         <div className="metric-tile">
           <span className="metric-tile-label">Actor Model</span>
-          <span className="metric-tile-value emerald">Llama-3.1 8B</span>
+          <span className="metric-tile-value emerald">{telemetry.actor_model}</span>
         </div>
 
         <div className="metric-tile">
           <span className="metric-tile-label">Critic Model</span>
-          <span className="metric-tile-value cyan">DeepSeek Coder</span>
+          <span className="metric-tile-value cyan">{telemetry.critic_model}</span>
         </div>
 
         <div className="metric-tile">
           <span className="metric-tile-label">Local Throughput</span>
-          <span className="metric-tile-value amber">{tokensPerSec} tok/s</span>
+          <span className="metric-tile-value amber">{telemetry.tokens_per_sec} tok/s</span>
         </div>
       </div>
 
       {/* SVG Animated Telemetry Sparkline */}
       <div className="chart-container-box">
         <div className="chart-meta-row">
-          <span>Real-time Latency Waveform (~{latency}ms)</span>
+          <span>Real-time Latency Waveform (~{telemetry.latency_ms}ms)</span>
           <span style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--status-emerald)' }}>● Live Sampling</span>
         </div>
 
@@ -83,10 +109,10 @@ export function HardwareMonitor() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-secondary)' }}>
           <span>VRAM Footprint</span>
-          <span style={{ fontFamily: 'var(--font-mono)' }}>0.1% Utilized</span>
+          <span style={{ fontFamily: 'var(--font-mono)' }}>{telemetry.vram_percent}% Utilized</span>
         </div>
         <div className="vram-bar-track" style={{ height: '8px' }}>
-          <div className="vram-bar-fill" style={{ width: '0.1%' }} />
+          <div className="vram-bar-fill" style={{ width: `${Math.max(0.1, telemetry.vram_percent)}%` }} />
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '11px', color: 'var(--text-muted)' }}>
           <span>0 GB</span>

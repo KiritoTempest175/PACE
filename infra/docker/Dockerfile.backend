@@ -1,0 +1,78 @@
+# ==============================================================================
+#  Dockerfile.backend — PACE FastAPI Backend Service
+#  Stream B / Global Infrastructure
+#
+#  Builds a production-ready image for the FastAPI backend that:
+#    - Installs all Python dependencies
+#    - Exposes the API on port 8000
+#    - Runs Uvicorn with multiple workers for concurrency
+#
+#  Build:
+#    docker build -f infra/docker/Dockerfile.backend -t pace-backend .
+#  Run:
+#    docker run -p 8000:8000 pace-backend
+# ==============================================================================
+
+# ── Base image ────────────────────────────────────────────────────────────────
+FROM python:3.11-slim AS base
+
+# Metadata
+LABEL maintainer="PACE Engineering Team"
+LABEL description="PACE FastAPI Backend — Actor-Critic AI Ensemble API"
+
+# Prevent Python from writing .pyc files and buffer stdout/stderr
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    # Where pip installs packages to (avoids root-owned site-packages)
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
+# ── System dependencies ───────────────────────────────────────────────────────
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential \
+        libmupdf-dev \
+        curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# ── Working directory ─────────────────────────────────────────────────────────
+WORKDIR /app
+
+# ── Install Python dependencies ───────────────────────────────────────────────
+# Copy only requirements first for better Docker layer caching
+COPY requirements.txt .
+RUN pip install --upgrade pip \
+    && pip install -r requirements.txt \
+    # Extra backend-specific deps not always in requirements.txt
+    && pip install \
+        uvicorn[standard] \
+        fastapi \
+        pydantic \
+        pymupdf \
+        rouge-score \
+        nltk \
+        requests \
+        beautifulsoup4
+
+# Download NLTK data at build time so the container is fully self-contained
+RUN python -m nltk.downloader punkt punkt_tab -d /usr/share/nltk_data
+
+# ── Copy application source ───────────────────────────────────────────────────
+COPY . .
+
+# ── Upload directory (volume-mountable) ──────────────────────────────────────
+RUN mkdir -p /app/uploads
+VOLUME ["/app/uploads"]
+
+# ── Expose API port ───────────────────────────────────────────────────────────
+EXPOSE 8000
+
+# ── Health check ─────────────────────────────────────────────────────────────
+HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+# ── Entry point ───────────────────────────────────────────────────────────────
+CMD ["uvicorn", "backend.main:app", \
+     "--host", "0.0.0.0", \
+     "--port", "8000", \
+     "--workers", "2", \
+     "--log-level", "info"]
