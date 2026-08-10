@@ -1,0 +1,123 @@
+# ==============================================================================
+#  docker-compose.yml — PACE One-Click Deployment Orchestrator
+#  Stream B / Global Infrastructure
+#
+#  Orchestrates three services:
+#    1. backend  — FastAPI + all Stream B Python services  (port 8000)
+#    2. sandbox  — Isolated code execution environment     (internal only)
+#    3. frontend — Vite/React UI served via Nginx          (port 5173)
+#
+#  Usage:
+#    docker compose up --build          # build & start all services
+#    docker compose up -d               # start in detached mode
+#    docker compose logs -f backend     # stream backend logs
+#    docker compose down                # stop & remove containers
+#
+#  Environment variables:
+#    Copy .env.example to .env and fill in values before running.
+# ==============================================================================
+
+version: "3.9"
+
+# ── Shared network ────────────────────────────────────────────────────────────
+networks:
+  pace_internal:
+    driver: bridge
+  # The sandbox is on a separate, isolated network with no internet access
+  sandbox_net:
+    driver: bridge
+    internal: true      # no external routing
+
+# ── Named volumes ─────────────────────────────────────────────────────────────
+volumes:
+  uploads_data:
+    driver: local
+  corpus_data:
+    driver: local
+
+# ── Services ──────────────────────────────────────────────────────────────────
+services:
+
+  # ── 1. FastAPI Backend ──────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ../..          # repo root (so COPY . . in Dockerfile works)
+      dockerfile: infra/docker/Dockerfile.backend
+    container_name: pace_backend
+    restart: unless-stopped
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONPATH=/app
+      - LOG_LEVEL=info
+    volumes:
+      # Persist uploaded PDFs across restarts
+      - uploads_data:/app/uploads
+      # Persist scraped corpus files
+      - corpus_data:/app/masteries/literacy/data/corpus
+    networks:
+      - pace_internal
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    depends_on:
+      sandbox:
+        condition: service_healthy
+
+  # ── 2. Sandbox Executor ─────────────────────────────────────────────────────
+  sandbox:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.sandbox
+    container_name: pace_sandbox
+    restart: unless-stopped
+    # Hard resource limits — untrusted code cannot monopolise the host
+    mem_limit: 256m
+    cpus: "0.50"
+    # No external network access
+    networks:
+      - sandbox_net
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # ── 3. React / Vite Frontend (served via Nginx) ─────────────────────────────
+  frontend:
+    build:
+      context: ../../frontend
+      dockerfile: Dockerfile.frontend          # see note below *
+    container_name: pace_frontend
+    restart: unless-stopped
+    ports:
+      - "5173:80"               # Nginx listens on 80 inside the container
+    environment:
+      # Point the built JS bundle at the backend API
+      - VITE_API_BASE_URL=http://localhost:8000
+    networks:
+      - pace_internal
+    depends_on:
+      backend:
+        condition: service_healthy
+
+# ==============================================================================
+# * frontend/Dockerfile.frontend is the standard Vite build + Nginx serve image.
+#   Create it with:
+#
+#   FROM node:20-alpine AS builder
+#   WORKDIR /app
+#   COPY package*.json ./
+#   RUN npm ci
+#   COPY . .
+#   RUN npm run build
+#
+#   FROM nginx:alpine
+#   COPY --from=builder /app/dist /usr/share/nginx/html
+#   EXPOSE 80
+#   CMD ["nginx", "-g", "daemon off;"]
+# ==============================================================================

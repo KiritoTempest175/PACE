@@ -16,6 +16,8 @@ import {
   BookOpen,
   Globe2,
   Layers,
+  Paperclip,
+  FileText,
 } from 'lucide-react'
 
 const API_BASE = '/api'
@@ -121,7 +123,11 @@ export function ChatInterface({ type }) {
       const res = await fetch(`${API_BASE}/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: value }),
+        body: JSON.stringify({
+          text: value,
+          mode: type,
+          speed_mode: speedMode,
+        }),
       })
       const data = await res.json()
       setMessages((prev) => [
@@ -143,6 +149,57 @@ export function ChatInterface({ type }) {
       ])
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleFileUpload = async (event) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    setLoading(true)
+    setMessages((prev) => [...prev, { role: 'user', text: `📎 Uploading document: ${file.name}` }])
+
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+
+      const res = await fetch(`${API_BASE}/upload`, {
+        method: 'POST',
+        body: formData,
+      })
+      const data = await res.json()
+
+      if (data.status === 'error' || data.error) {
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: 'assistant',
+            text: `⚠️ Upload Error: ${data.error || 'Failed to process document'}`,
+            source: 'error',
+          },
+        ])
+      } else {
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: 'assistant',
+            text: `📄 **Document Ingested: ${data.filename}**\n\n- **Pages:** ${data.pages}\n- **Characters:** ${data.characters}\n- **Extracted Chunks:** ${data.chunks}\n\n**Preview Chunk:**\n\`\`\`\n${data.preview || '(Empty preview)'}\n\`\`\``,
+            source: 'actor-critic-ensemble',
+          },
+        ])
+      }
+    } catch (err) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: 'assistant',
+          text: `⚠️ Upload failed: ${err.message}`,
+          source: 'error',
+        },
+      ])
+    } finally {
+      setLoading(false)
+      event.target.value = ''
     }
   }
 
@@ -302,6 +359,29 @@ export function ChatInterface({ type }) {
       {/* Floating Composer */}
       <div className="composer-container">
         <form className="composer-form" onSubmit={submit}>
+          <label
+            title="Upload PDF document to backend"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: '36px',
+              height: '36px',
+              borderRadius: 'var(--radius-md)',
+              cursor: loading ? 'not-allowed' : 'pointer',
+              color: 'var(--text-secondary)',
+              transition: 'var(--transition-fast)',
+            }}
+          >
+            <Paperclip size={18} />
+            <input
+              type="file"
+              accept=".pdf"
+              style={{ display: 'none' }}
+              onChange={handleFileUpload}
+              disabled={loading}
+            />
+          </label>
           <input
             className="composer-input"
             value={input}
