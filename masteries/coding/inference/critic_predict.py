@@ -3,23 +3,49 @@ PACE Critic Inference Node
 Task LE-2: Loads the trained 125M CodeBERT Critic, evaluates a batch of code strings.
 """
 
+import os
 import torch
 import gc
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 
 
 def evaluate_syntax_batch(
-    code_snippets: list[str], model_dir: str = "masteries/coding/models/critic_v3"
+    code_snippets: list[str],
+    model_dir: str = "masteries/coding/models/critic_v3",
+    fallback_model: str = "microsoft/codebert-base",
 ) -> list[float]:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    tokenizer = AutoTokenizer.from_pretrained(model_dir)
-    tokenizer.pad_token = tokenizer.eos_token
+    target_dir = model_dir if os.path.exists(model_dir) else fallback_model
+
+    try:
+        tokenizer = AutoTokenizer.from_pretrained(target_dir)
+    except Exception:
+        tokenizer = None
+
+    if tokenizer is None and target_dir != fallback_model:
+        try:
+            tokenizer = AutoTokenizer.from_pretrained(fallback_model)
+        except Exception:
+            tokenizer = None
+
+    if tokenizer is None:
+        raise ValueError(
+            f"Failed to load tokenizer from '{target_dir}' or fallback '{fallback_model}'."
+        )
+
+    if getattr(tokenizer, "pad_token", None) is None:
+        tokenizer.pad_token = tokenizer.eos_token
 
     # Initialize with num_labels=2 for binary classification
-    model = AutoModelForSequenceClassification.from_pretrained(
-        model_dir, num_labels=2
-    ).to(device)
+    try:
+        model = AutoModelForSequenceClassification.from_pretrained(
+            target_dir, num_labels=2
+        ).to(device)
+    except Exception:
+        model = AutoModelForSequenceClassification.from_pretrained(
+            fallback_model, num_labels=2
+        ).to(device)
 
     inputs = tokenizer(
         code_snippets,

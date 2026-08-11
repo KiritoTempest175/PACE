@@ -24,3 +24,11 @@ dev = [
     "flake8>=6.0.0",
     "mypy>=1.0.0"
 ]
+
+[tool.pyright]
+pythonVersion = "3.10"
+extraPaths = ["."]
+executionEnvironments = [
+  { root = "." }
+]
+

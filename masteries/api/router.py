@@ -137,10 +137,11 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 
 @router.post("/upload")
 async def upload_pdf(file: UploadFile = File(...)):
-    if not file.filename.lower().endswith(".pdf"):
+    filename = file.filename
+    if not filename or not filename.lower().endswith(".pdf"):
         return {"error": "Only PDF files are allowed.", "status": "error"}
 
-    file_path = UPLOAD_DIR / file.filename
+    file_path = UPLOAD_DIR / filename
 
     with file_path.open("wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
@@ -150,21 +151,21 @@ async def upload_pdf(file: UploadFile = File(...)):
         pages = pagenumber(str(file_path))
         chunks = chunk_text(text)
         return {
-            "filename": file.filename,
+            "filename": filename,
             "pages": pages,
             "characters": len(text),
             "chunks": len(chunks),
             "preview": chunks[0] if chunks else "",
             "status": "success",
-            "message": f"Successfully processed '{file.filename}' ({pages} pages, {len(chunks)} chunks extracted).",
+            "message": f"Successfully processed '{filename}' ({pages} pages, {len(chunks)} chunks extracted).",
         }
     except Exception as e:
         return {
-            "filename": file.filename,
+            "filename": filename,
             "pages": 0,
             "characters": 0,
             "chunks": 0,
-            "preview": f"Uploaded '{file.filename}' successfully.",
+            "preview": f"Uploaded '{filename}' successfully.",
             "status": "success",
-            "message": f"File uploaded: {file.filename} (Note: {e})",
+            "message": f"File uploaded: {filename} (Note: {e})",
         }
