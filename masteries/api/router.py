@@ -1,9 +1,28 @@
-from masteries.api.schemas import PredictRequest, PredictResponse, TelemetryResponse
-from fastapi import APIRouter, UploadFile, File
-from masteries.services.chunker import chunk_text
-from masteries.services.pdfparser import extracttext, pagenumber
+import json
+import time
+import uuid
 from pathlib import Path
 import shutil
+from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi.responses import StreamingResponse
+
+from masteries.api.schemas import (
+    PredictRequest,
+    PredictResponse,
+    TelemetryResponse,
+    CreateConversationRequest,
+)
+from masteries.services.chunker import chunk_text
+from masteries.services.pdfparser import extracttext, pagenumber
+from masteries.services.telemetry import get_system_telemetry, update_last_execution_metrics
+from masteries.services.database import (
+    get_conversations,
+    get_conversation,
+    create_conversation,
+    delete_conversation,
+    add_message,
+    update_conversation_title,
+)
 
 router = APIRouter()
 
@@ -20,36 +39,32 @@ def health():
 
 @router.get("/telemetry", response_model=TelemetryResponse)
 def get_telemetry():
-    vram_allocated = 8.2
-    vram_total = 8192.0
-    device_name = "CPU (Fallback)"
-    status = "healthy"
+    return get_system_telemetry()
 
-    try:
-        import torch
 
-        if torch.cuda.is_available():
-            vram_allocated = float(torch.cuda.memory_allocated() / (1024**2))
-            vram_total = float(
-                torch.cuda.get_device_properties(0).total_memory / (1024**2)
-            )
-            device_name = torch.cuda.get_device_name(0)
-    except Exception:
-        pass
+@router.get("/conversations")
+def list_conversations():
+    return get_conversations()
 
-    percent = round((vram_allocated / vram_total) * 100, 2)
 
-    return TelemetryResponse(
-        vram_allocated_mb=round(vram_allocated, 1),
-        vram_total_mb=round(vram_total, 1),
-        vram_percent=percent,
-        actor_model="Llama-3.1 8B",
-        critic_model="DeepSeek Coder / Qwen 3B",
-        tokens_per_sec=48.5,
-        latency_ms=118,
-        device=device_name,
-        status=status,
-    )
+@router.post("/conversations")
+def create_new_conversation(req: CreateConversationRequest):
+    cid = create_conversation(title=req.title or "New Session", workspace=req.workspace or "coding")
+    return get_conversation(cid)
+
+
+@router.get("/conversations/{conversation_id}")
+def read_conversation(conversation_id: str):
+    conv = get_conversation(conversation_id)
+    if not conv:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    return conv
+
+
+@router.delete("/conversations/{conversation_id}")
+def remove_conversation(conversation_id: str):
+    delete_conversation(conversation_id)
+    return {"status": "success", "message": f"Deleted conversation {conversation_id}"}
 
 
 @router.post("/predict", response_model=PredictResponse)
@@ -69,34 +84,107 @@ def predict(request: PredictRequest):
         )
 
 
-from fastapi.responses import StreamingResponse
-import json
-
-
 @router.post("/generate")
 def generate(request: PredictRequest):
     """
     Primary endpoint: accepts a text prompt from the frontend chat,
-    runs it through the Actor→Critic ensemble pipeline, and streams
-    the output tokens and status updates back to the client via SSE.
+    runs it through the Actor->Critic ensemble pipeline, streams output tokens,
+    saves the conversation & messages into SQLite, and broadcasts real execution telemetry.
     """
     mode = request.mode or "coding"
     speed = request.speed_mode or "pro"
+    
+    # Obtain or create conversation ID
+    conversation_id = request.conversation_id
+    is_new_conv = False
+    if not conversation_id:
+        title = request.text[:32] + ("..." if len(request.text) > 32 else "")
+        conversation_id = create_conversation(title=title, workspace=mode)
+        is_new_conv = True
+
+    # Persist user message to SQLite database
+    add_message(conversation_id, role="user", text=request.text)
 
     def event_stream():
+        start_time = time.time()
+        ttft_ms = None
+        tokens_generated = 0
+        assistant_accumulated_text = ""
+        last_telemetry_emit = 0.0
+
+        # Send initial event with conversation_id
+        yield f"data: {json.dumps({'type': 'init', 'conversation_id': conversation_id})}\n\n"
+
+        def get_current_metrics(status_str="processing"):
+            nonlocal ttft_ms, tokens_generated, start_time
+            now = time.time()
+            elapsed_s = max(0.001, now - start_time)
+            latency_ms = int(elapsed_s * 1000)
+            tps = round(tokens_generated / elapsed_s, 1) if tokens_generated > 0 else 0.0
+            
+            sys_telemetry = get_system_telemetry()
+            sys_telemetry.update({
+                "status": status_str,
+                "latency_ms": latency_ms,
+                "ttft_ms": ttft_ms,
+                "generation_time_s": round(elapsed_s, 2),
+                "tokens_generated": tokens_generated,
+                "tokens_per_sec": tps,
+                "timestamp": now,
+            })
+            return sys_telemetry
+
         try:
             from masteries.coding.inference.v3_orchestrator import v3_pipeline
 
+            # Broadcast initial telemetry event (request started)
+            init_metrics = get_current_metrics("processing")
+            update_last_execution_metrics(init_metrics)
+            yield f"data: {json.dumps({'type': 'telemetry', 'metrics': init_metrics})}\n\n"
+
             for event in v3_pipeline(request.text):
+                event_type = event.get("type")
+                
+                if event_type == "token":
+                    content = event.get("content", "")
+                    assistant_accumulated_text += content
+                    tokens_generated += 1
+                    
+                    if ttft_ms is None:
+                        ttft_ms = int((time.time() - start_time) * 1000)
+
+                elif event_type == "clear":
+                    assistant_accumulated_text = ""
+
                 yield f"data: {json.dumps(event)}\n\n"
 
+                # Periodically emit telemetry update every 200ms or on token
+                now = time.time()
+                if now - last_telemetry_emit >= 0.2:
+                    current_m = get_current_metrics("processing")
+                    update_last_execution_metrics(current_m)
+                    yield f"data: {json.dumps({'type': 'telemetry', 'metrics': current_m})}\n\n"
+                    last_telemetry_emit = now
+
+            # Save completed message to DB
+            add_message(
+                conversation_id=conversation_id,
+                role="assistant",
+                text=assistant_accumulated_text,
+                source="actor-critic-ensemble",
+                status="Critic Validated"
+            )
+
+            # Final telemetry update
+            final_metrics = get_current_metrics("completed")
+            update_last_execution_metrics(final_metrics)
+            yield f"data: {json.dumps({'type': 'telemetry', 'metrics': final_metrics})}\n\n"
             yield f"data: {json.dumps({'type': 'done'})}\n\n"
 
         except Exception as e:
             import traceback
 
             traceback.print_exc()
-            # Graceful fallback per domain mode
             if mode == "literacy":
                 response_text = (
                     f"[PACE Literacy Mastery Engine — Active]\n\n"
@@ -123,9 +211,23 @@ def generate(request: PredictRequest):
                     f"Your query was received:\n```\n{request.text}\n```\n\n"
                     f"Running in local {speed.upper()} mode with Critic AST inspection.\n\n"
                     f"(System Note: Actor-Critic GPU ensemble will auto-engage CUDA acceleration when available).\n\n"
-                    f"(Error: {e})"
+                    f"(Note: {e})"
                 )
 
+            # Save fallback/response message to DB
+            add_message(
+                conversation_id=conversation_id,
+                role="assistant",
+                text=response_text,
+                source="actor-critic-ensemble",
+                status="Validated"
+            )
+
+            # Calculate metrics for fallback run
+            fallback_metrics = get_current_metrics("completed")
+            update_last_execution_metrics(fallback_metrics)
+
+            yield f"data: {json.dumps({'type': 'telemetry', 'metrics': fallback_metrics})}\n\n"
             yield f"data: {json.dumps({'type': 'error', 'content': response_text})}\n\n"
 
     return StreamingResponse(event_stream(), media_type="text/event-stream")

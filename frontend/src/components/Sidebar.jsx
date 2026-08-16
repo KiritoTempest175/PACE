@@ -1,6 +1,6 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import {
   LayoutDashboard,
   Plus,
@@ -8,7 +8,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Settings,
-  HardDrive,
   MessageSquare,
   Trash2,
   Code2,
@@ -16,51 +15,80 @@ import {
   Globe2
 } from 'lucide-react'
 
+const API_BASE = '/api'
+
 export function Sidebar({ collapsed, setCollapsed, mobileOpen, setMobileOpen, onOpenSettings }) {
   const location = useLocation()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const activeChatIdFromUrl = searchParams.get('chat')
 
-  // ChatGPT-style Chat History list (Today's conversations only)
-  const [chatHistory, setChatHistory] = useState([
-    {
-      id: 'chat-1',
-      title: 'Async Retry Handler with Backoff',
-      workspace: 'coding',
-      group: 'Today',
-      icon: Code2,
-    },
-    {
-      id: 'chat-2',
-      title: 'Custom React Debounce Hook',
-      workspace: 'coding',
-      group: 'Today',
-      icon: Code2,
-    },
-  ])
+  const [chatHistory, setChatHistory] = useState([])
+  const [loading, setLoading] = useState(false)
 
-  const [activeChatId, setActiveChatId] = useState('chat-1')
+  // Fetch real conversation history from SQLite database backend
+  const fetchConversations = useCallback(async () => {
+    try {
+      setLoading(true)
+      const res = await fetch(`${API_BASE}/conversations`)
+      if (res.ok) {
+        const data = await res.json()
+        setChatHistory(data)
+      }
+    } catch (e) {
+      console.error("Failed to load conversations:", e)
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    fetchConversations()
+  }, [fetchConversations])
+
+  // Listen for global chat creation/update events to refresh list
+  useEffect(() => {
+    const handleChatRefresh = () => fetchConversations()
+    window.addEventListener('pace-refresh-chats', handleChatRefresh)
+    return () => window.removeEventListener('pace-refresh-chats', handleChatRefresh)
+  }, [fetchConversations])
 
   const handleNewChat = () => {
     window.dispatchEvent(new CustomEvent('pace-new-chat'))
-    if (location.pathname === '/') {
-      navigate('/coding')
+    const currentWorkspace = location.pathname.startsWith('/literacy')
+      ? 'literacy'
+      : location.pathname.startsWith('/research')
+      ? 'research'
+      : 'coding'
+    navigate(`/${currentWorkspace}`)
+  }
+
+  const handleDeleteChat = async (e, id) => {
+    e.stopPropagation()
+    e.preventDefault()
+
+    try {
+      await fetch(`${API_BASE}/conversations/${id}`, { method: 'DELETE' })
+      setChatHistory((prev) => prev.filter((chat) => chat.id !== id))
+      if (activeChatIdFromUrl === id) {
+        handleNewChat()
+      }
+    } catch (err) {
+      console.error("Failed to delete chat:", err)
     }
   }
 
-  const handleDeleteChat = (e, id) => {
-    e.stopPropagation()
-    e.preventDefault()
-    setChatHistory((prev) => prev.filter((chat) => chat.id !== id))
-  }
-
   const handleSelectChat = (chat) => {
-    setActiveChatId(chat.id)
     setMobileOpen(false)
-    navigate(`/${chat.workspace}`)
+    const targetWorkspace = chat.workspace || 'coding'
+    navigate(`/${targetWorkspace}?chat=${chat.id}`)
   }
 
-  // Group history items by time group (Today only)
-  const groups = ['Today']
+  const getWorkspaceIcon = (ws) => {
+    if (ws === 'literacy') return BookOpen
+    if (ws === 'research') return Globe2
+    return Code2
+  }
 
   return (
     <>
@@ -124,63 +152,63 @@ export function Sidebar({ collapsed, setCollapsed, mobileOpen, setMobileOpen, on
             {!collapsed && <span>Dashboard Overview</span>}
           </Link>
 
-          {groups.map((groupName) => {
-            const itemsInGroup = chatHistory.filter((c) => c.group === groupName)
-            if (itemsInGroup.length === 0) return null
-
-            return (
-              <div key={groupName} className="nav-group" style={{ marginTop: '12px' }}>
-                {!collapsed && <div className="nav-group-title">{groupName}</div>}
-                {itemsInGroup.map((chat) => {
-                  const Icon = chat.icon || MessageSquare
-                  const isActive = activeChatId === chat.id && location.pathname === `/${chat.workspace}`
-                  return (
-                    <div
-                      key={chat.id}
-                      className={`nav-item-link ${isActive ? 'active' : ''}`}
-                      onClick={() => handleSelectChat(chat)}
-                      title={`${chat.title} (${chat.workspace})`}
-                      style={{ cursor: 'pointer', position: 'relative' }}
-                    >
-                      <Icon size={16} style={{ flexShrink: 0 }} />
-                      {!collapsed && (
-                        <span
-                          style={{
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
-                            flex: 1,
-                            fontSize: '13px',
-                          }}
-                        >
-                          {chat.title}
-                        </span>
-                      )}
-                      {!collapsed && (
-                        <button
-                          className="chat-delete-btn"
-                          onClick={(e) => handleDeleteChat(e, chat.id)}
-                          title="Delete chat"
-                          style={{
-                            background: 'transparent',
-                            border: 'none',
-                            color: 'var(--text-muted)',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            padding: '2px',
-                            borderRadius: '4px',
-                          }}
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      )}
-                    </div>
-                  );
-                })}
+          <div className="nav-group" style={{ marginTop: '12px' }}>
+            {!collapsed && <div className="nav-group-title">History</div>}
+            
+            {chatHistory.length === 0 && !loading && !collapsed && (
+              <div style={{ fontSize: '12px', color: 'var(--text-muted)', padding: '8px 12px' }}>
+                No past sessions
               </div>
-            )
-          })}
+            )}
+
+            {chatHistory.map((chat) => {
+              const Icon = getWorkspaceIcon(chat.workspace)
+              const isActive = activeChatIdFromUrl === chat.id
+              return (
+                <div
+                  key={chat.id}
+                  className={`nav-item-link ${isActive ? 'active' : ''}`}
+                  onClick={() => handleSelectChat(chat)}
+                  title={`${chat.title} (${chat.workspace})`}
+                  style={{ cursor: 'pointer', position: 'relative' }}
+                >
+                  <Icon size={16} style={{ flexShrink: 0 }} />
+                  {!collapsed && (
+                    <span
+                      style={{
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                        flex: 1,
+                        fontSize: '13px',
+                      }}
+                    >
+                      {chat.title}
+                    </span>
+                  )}
+                  {!collapsed && (
+                    <button
+                      className="chat-delete-btn"
+                      onClick={(e) => handleDeleteChat(e, chat.id)}
+                      title="Delete chat"
+                      style={{
+                        background: 'transparent',
+                        border: 'none',
+                        color: 'var(--text-muted)',
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        padding: '2px',
+                        borderRadius: '4px',
+                      }}
+                    >
+                      <Trash2 size={13} />
+                    </button>
+                  )}
+                </div>
+              )
+            })}
+          </div>
         </nav>
 
         {/* Footer Spec & Settings */}

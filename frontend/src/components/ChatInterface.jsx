@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
-import { useLocation } from 'react-router-dom'
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Send,
@@ -9,7 +9,6 @@ import {
   Copy,
   Check,
   Cpu,
-  CornerDownLeft,
   Sparkles,
   Loader2,
   Code2,
@@ -17,8 +16,10 @@ import {
   Globe2,
   Layers,
   Paperclip,
-  FileText,
+  AlertTriangle,
 } from 'lucide-react'
+import { telemetryStore } from '../utils/telemetryStore'
+import { ThinkingIndicator } from './ThinkingIndicator'
 
 const API_BASE = '/api'
 
@@ -60,27 +61,95 @@ const modesConfig = {
 
 export function ChatInterface({ type }) {
   const location = useLocation()
+  const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const activeChatId = searchParams.get('chat')
+
   const mode = modesConfig[type] || modesConfig.coding
 
   const [input, setInput] = useState('')
   const [messages, setMessages] = useState([])
   const [loading, setLoading] = useState(false)
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [historyError, setHistoryError] = useState(null)
   const [speedMode, setSpeedMode] = useState('pro') // 'pro' | 'fast'
   const [copiedIndex, setCopiedIndex] = useState(null)
 
+  const activeChatIdRef = useRef(activeChatId)
+  const abortControllerRef = useRef(null)
   const messagesEndRef = useRef(null)
 
   const renderedWelcome = useMemo(() => mode.welcome.replaceAll('**', ''), [mode.welcome])
 
   useEffect(() => {
+    activeChatIdRef.current = activeChatId
+  }, [activeChatId])
+
+  useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages, loading])
+
+  // Fetch conversation messages on activeChatId change with AbortController for race condition protection
+  useEffect(() => {
+    if (!activeChatId) {
+      setMessages([])
+      setHistoryLoading(false)
+      setHistoryError(null)
+      return
+    }
+
+    // Cancel previous inflight request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort()
+    }
+    const controller = new AbortController()
+    abortControllerRef.current = controller
+
+    const loadConversation = async () => {
+      setHistoryLoading(true)
+      setHistoryError(null)
+      setMessages([]) // Don't temporarily show messages from previous conversation
+
+      try {
+        const res = await fetch(`${API_BASE}/conversations/${activeChatId}`, {
+          signal: controller.signal,
+        })
+
+        if (!res.ok) {
+          throw new Error(`Failed to load chat (${res.status})`)
+        }
+
+        const data = await res.json()
+
+        // Rapid clicking check: verify active chat ID hasn't changed while request was in-flight
+        if (activeChatIdRef.current === activeChatId) {
+          setMessages(data.messages || [])
+        }
+      } catch (err) {
+        if (err.name === 'AbortError') return
+        if (activeChatIdRef.current === activeChatId) {
+          setHistoryError(err.message || 'Error loading conversation messages.')
+        }
+      } finally {
+        if (activeChatIdRef.current === activeChatId) {
+          setHistoryLoading(false)
+        }
+      }
+    }
+
+    loadConversation()
+
+    return () => {
+      controller.abort()
+    }
+  }, [activeChatId])
 
   // Listen for global custom event 'pace-new-chat'
   useEffect(() => {
     const handleReset = () => {
       setMessages([])
       setInput('')
+      setHistoryError(null)
     }
     window.addEventListener('pace-new-chat', handleReset)
     return () => window.removeEventListener('pace-new-chat', handleReset)
@@ -107,25 +176,27 @@ export function ChatInterface({ type }) {
   }
 
   const handleNewChat = () => {
-    setMessages([])
-    setInput('')
+    window.dispatchEvent(new CustomEvent('pace-new-chat'))
+    navigate(`/${type}`)
   }
 
   const submitWithText = async (textToSubmit) => {
     const value = textToSubmit.trim()
     if (!value || loading) return
 
-    const messageId = Date.now()
+    const messageId = Date.now().toString()
+    let currentConversationId = activeChatId
 
     setMessages((prev) => [...prev, { id: messageId, role: 'user', text: value }])
     setInput('')
     setLoading(true)
 
-    // Add empty assistant message that we will stream into
+    // Add assistant message streaming placeholder
+    const assistantMsgId = (Date.now() + 1).toString()
     setMessages((prev) => [
       ...prev,
       {
-        id: messageId + 1,
+        id: assistantMsgId,
         role: 'assistant',
         text: '',
         status: 'Starting pipeline...',
@@ -141,6 +212,7 @@ export function ChatInterface({ type }) {
           text: value,
           mode: type,
           speed_mode: speedMode,
+          conversation_id: currentConversationId,
         }),
       })
 
@@ -156,7 +228,7 @@ export function ChatInterface({ type }) {
         if (chunk) {
           buffer += decoder.decode(chunk, { stream: true })
           const lines = buffer.split('\n\n')
-          buffer = lines.pop() // keep the incomplete line in the buffer
+          buffer = lines.pop() // keep incomplete line in buffer
 
           for (const line of lines) {
             if (line.startsWith('data: ')) {
@@ -164,42 +236,53 @@ export function ChatInterface({ type }) {
               try {
                 const data = JSON.parse(dataStr)
 
-                if (data.type === 'status') {
+                if (data.type === 'init') {
+                  if (data.conversation_id && data.conversation_id !== currentConversationId) {
+                    currentConversationId = data.conversation_id
+                    // Update URL without full page reload
+                    navigate(`/${type}?chat=${currentConversationId}`, { replace: true })
+                    // Refresh sidebar
+                    window.dispatchEvent(new CustomEvent('pace-refresh-chats'))
+                  }
+                } else if (data.type === 'telemetry') {
+                  // Emit real telemetry update to global monitor
+                  telemetryStore.emit(data.metrics)
+                } else if (data.type === 'status') {
                   setMessages((prev) =>
-                    prev.map(msg => msg.id === messageId + 1
+                    prev.map(msg => msg.id === assistantMsgId
                       ? { ...msg, status: data.content }
                       : msg
                     )
                   )
                 } else if (data.type === 'clear') {
                   setMessages((prev) =>
-                    prev.map(msg => msg.id === messageId + 1
+                    prev.map(msg => msg.id === assistantMsgId
                       ? { ...msg, text: '' }
                       : msg
                     )
                   )
                 } else if (data.type === 'token') {
                   setMessages((prev) =>
-                    prev.map(msg => msg.id === messageId + 1
+                    prev.map(msg => msg.id === assistantMsgId
                       ? { ...msg, text: msg.text + data.content }
                       : msg
                     )
                   )
                 } else if (data.type === 'error') {
                   setMessages((prev) =>
-                    prev.map(msg => msg.id === messageId + 1
+                    prev.map(msg => msg.id === assistantMsgId
                       ? { ...msg, text: data.content, source: 'error', status: 'Error' }
                       : msg
                     )
                   )
                 } else if (data.type === 'done') {
-                  // Done event
                   setMessages((prev) =>
-                    prev.map(msg => msg.id === messageId + 1
+                    prev.map(msg => msg.id === assistantMsgId
                       ? { ...msg, status: 'Critic Validated' }
                       : msg
                     )
                   )
+                  window.dispatchEvent(new CustomEvent('pace-refresh-chats'))
                 }
               } catch (e) {
                 console.error("Error parsing JSON:", e, "Data:", dataStr)
@@ -210,7 +293,7 @@ export function ChatInterface({ type }) {
       }
     } catch (err) {
       setMessages((prev) =>
-        prev.map(msg => msg.id === messageId + 1
+        prev.map(msg => msg.id === assistantMsgId
           ? { ...msg, text: `⚠️ Could not reach local backend.\n\n(${err.message})`, source: 'error', status: 'Connection Failed' }
           : msg
         )
@@ -305,11 +388,11 @@ export function ChatInterface({ type }) {
           </button>
         </div>
 
-        {messages.length > 0 && (
+        {activeChatId && (
           <button
             className="icon-action-btn"
             onClick={handleNewChat}
-            title="Clear Chat History"
+            title="Start New Session"
           >
             <Trash2 size={16} />
           </button>
@@ -335,30 +418,51 @@ export function ChatInterface({ type }) {
           </div>
         </div>
 
+        {/* Loading State for History */}
+        {historyLoading && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '40px 0', gap: '10px', color: 'var(--text-secondary)' }}>
+            <Loader2 size={20} className="spin" style={{ animation: 'spin-shimmer 2s infinite linear' }} />
+            <span>Loading conversation messages...</span>
+          </div>
+        )}
+
+        {/* Error State for History */}
+        {historyError && (
+          <div className="msg-row">
+            <div style={{ backgroundColor: 'rgba(239, 68, 68, 0.1)', border: '1px solid var(--status-red)', borderRadius: 'var(--radius-md)', padding: '16px', color: '#EF4444', display: 'flex', alignItems: 'center', gap: '12px' }}>
+              <AlertTriangle size={18} />
+              <span>{historyError}</span>
+            </div>
+          </div>
+        )}
+
         {/* Messages Stream */}
-        {messages.map((msg, index) =>
-          msg.role === 'user' ? (
-            <div className="msg-row user" key={`msg-${index}`}>
+        {!historyLoading && messages.map((msg, index) => {
+          const isLastAssistantMsg = loading && index === messages.length - 1 && msg.role === 'assistant'
+          const isThinking = isLastAssistantMsg && (!msg.text || msg.text === '')
+
+          return msg.role === 'user' ? (
+            <div className="msg-row user" key={msg.id || `msg-${index}`}>
               <div className="user-bubble">{msg.text}</div>
             </div>
           ) : (
-            <div className="msg-row" key={`msg-${index}`}>
+            <div className="msg-row" key={msg.id || `msg-${index}`}>
               <div className="assistant-msg-box">
-                <div className="assistant-avatar-box">
-                  {loading && index === messages.length - 1 ? (
-                    <Loader2 size={18} className="spin" style={{ animation: 'spin-shimmer 2s infinite linear' }} />
-                  ) : (
-                    <Cpu size={18} />
-                  )}
+                <div className={`assistant-avatar-box ${isThinking ? 'thinking' : ''}`}>
+                  <Cpu size={18} />
                 </div>
                 <div className="assistant-content-wrap">
-                  <pre className="assistant-text-content" style={{ fontFamily: 'var(--font-mono)' }}>
-                    {msg.text}
-                  </pre>
+                  {isThinking ? (
+                    <ThinkingIndicator status={msg.status || 'AI is thinking'} />
+                  ) : (
+                    <pre className="assistant-text-content" style={{ fontFamily: 'var(--font-mono)' }}>
+                      {msg.text}
+                    </pre>
+                  )}
                   <div className="assistant-meta-bar">
                     <span className="critic-validated-badge">
-                      {loading && index === messages.length - 1 ? (
-                        <Loader2 size={13} className="spin" />
+                      {isThinking ? (
+                        <Sparkles size={13} style={{ color: 'var(--accent-primary)', animation: 'spark-pulse 1.8s infinite' }} />
                       ) : (
                         <Check size={13} />
                       )}
@@ -368,27 +472,27 @@ export function ChatInterface({ type }) {
                         ? 'Connection Error'
                         : 'Fallback Mode'}
                     </span>
-                    <button
-                      className="copy-text-btn"
-                      onClick={() => copyToClipboard(msg.text, index)}
-                      title="Copy code response"
-                    >
-                      {copiedIndex === index ? <Check size={13} /> : <Copy size={13} />}
-                      <span>{copiedIndex === index ? 'Copied' : 'Copy'}</span>
-                    </button>
+                    {!isThinking && (
+                      <button
+                        className="copy-text-btn"
+                        onClick={() => copyToClipboard(msg.text, index)}
+                        title="Copy response"
+                      >
+                        {copiedIndex === index ? <Check size={13} /> : <Copy size={13} />}
+                        <span>{copiedIndex === index ? 'Copied' : 'Copy'}</span>
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
             </div>
           )
-        )}
-
-        {/* Loading Shimmer State Removed - Streaming handles this inline */}
+        })}
 
         <div ref={messagesEndRef} />
 
         {/* Prompt Suggestions (Empty State) */}
-        {messages.length === 0 && mode.suggestions && (
+        {!historyLoading && messages.length === 0 && mode.suggestions && (
           <div style={{ marginTop: '24px', display: 'flex', flexDirection: 'column', gap: '14px' }}>
             <div style={{ fontSize: '12px', fontWeight: '700', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
               Recommended Workflow Starters
@@ -449,6 +553,14 @@ export function ChatInterface({ type }) {
             onChange={(e) => setInput(e.target.value)}
             placeholder={mode.placeholder}
             disabled={loading}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault()
+                if (!loading && input.trim()) {
+                  submitWithText(input)
+                }
+              }
+            }}
           />
           <button
             type="submit"

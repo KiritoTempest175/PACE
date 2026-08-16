@@ -1,8 +1,11 @@
+import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { MessageSquare, ArrowRight, Code2, BookOpen, Globe2 } from 'lucide-react'
 
+const API_BASE = '/api'
+
 export function RecentChats() {
-  const sessions = [
+  const [sessions, setSessions] = useState([
     {
       id: 'session-1',
       title: 'Async Retry Handler with Exponential Backoff',
@@ -27,7 +30,38 @@ export function RecentChats() {
       icon: Globe2,
       date: 'Yesterday',
     },
-  ]
+  ])
+
+  useEffect(() => {
+    const fetchRecent = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/conversations`)
+        if (res.ok) {
+          const data = await res.json()
+          if (data && data.length > 0) {
+            const mapped = data.slice(0, 3).map((conv) => {
+              const ws = conv.workspace || 'coding'
+              const icon = ws === 'literacy' ? BookOpen : ws === 'research' ? Globe2 : Code2
+              const wsName = ws === 'literacy' ? 'Literacy Mastery' : ws === 'research' ? 'Research Mastery' : 'Coding Mastery'
+              return {
+                id: conv.id,
+                title: conv.title,
+                workspace: wsName,
+                path: `/${ws}?chat=${conv.id}`,
+                icon: icon,
+                date: new Date(conv.updated_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+              }
+            })
+            setSessions(mapped)
+          }
+        }
+      } catch (e) {
+        console.error("Failed to fetch recent sessions:", e)
+      }
+    }
+
+    fetchRecent()
+  }, [])
 
   return (
     <div className="recent-chats-card">
