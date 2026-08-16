@@ -4,12 +4,12 @@ from transformers import AutoModelForCausalLM, AutoTokenizer
 
 class QwenCritic:
     """
-    A Code Critic model using Qwen 3B to check for both bugs and logic.
+    A Code Critic model using Qwen 1.5B to check for both bugs and logic.
     """
 
     def __init__(
         self,
-        model_id="Qwen/Qwen2.5-3B-Instruct",
+        model_id="Qwen/Qwen2.5-1.5B-Instruct",
         device="cuda" if torch.cuda.is_available() else "cpu",
     ):
         self.device = device
@@ -82,7 +82,7 @@ class QwenCritic:
 
 if __name__ == "__main__":
     print(
-        "Initializing Critic Model (this may take a while as it downloads the Qwen 3B model weights)..."
+        "Initializing Critic Model (this may take a while as it downloads the Qwen 1.5B model weights)..."
     )
     critic = QwenCritic()
 

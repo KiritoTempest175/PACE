@@ -1,6 +1,5 @@
 import json
 import time
-import uuid
 from pathlib import Path
 import shutil
 from fastapi import APIRouter, UploadFile, File, HTTPException
@@ -14,14 +13,16 @@ from masteries.api.schemas import (
 )
 from masteries.services.chunker import chunk_text
 from masteries.services.pdfparser import extracttext, pagenumber
-from masteries.services.telemetry import get_system_telemetry, update_last_execution_metrics
+from masteries.services.telemetry import (
+    get_system_telemetry,
+    update_last_execution_metrics,
+)
 from masteries.services.database import (
     get_conversations,
     get_conversation,
     create_conversation,
     delete_conversation,
     add_message,
-    update_conversation_title,
 )
 
 router = APIRouter()
@@ -49,7 +50,9 @@ def list_conversations():
 
 @router.post("/conversations")
 def create_new_conversation(req: CreateConversationRequest):
-    cid = create_conversation(title=req.title or "New Session", workspace=req.workspace or "coding")
+    cid = create_conversation(
+        title=req.title or "New Session", workspace=req.workspace or "coding"
+    )
     return get_conversation(cid)
 
 
@@ -93,14 +96,12 @@ def generate(request: PredictRequest):
     """
     mode = request.mode or "coding"
     speed = request.speed_mode or "pro"
-    
+
     # Obtain or create conversation ID
     conversation_id = request.conversation_id
-    is_new_conv = False
     if not conversation_id:
         title = request.text[:32] + ("..." if len(request.text) > 32 else "")
         conversation_id = create_conversation(title=title, workspace=mode)
-        is_new_conv = True
 
     # Persist user message to SQLite database
     add_message(conversation_id, role="user", text=request.text)
@@ -120,36 +121,40 @@ def generate(request: PredictRequest):
             now = time.time()
             elapsed_s = max(0.001, now - start_time)
             latency_ms = int(elapsed_s * 1000)
-            tps = round(tokens_generated / elapsed_s, 1) if tokens_generated > 0 else 0.0
-            
+            tps = (
+                round(tokens_generated / elapsed_s, 1) if tokens_generated > 0 else 0.0
+            )
+
             sys_telemetry = get_system_telemetry()
-            sys_telemetry.update({
-                "status": status_str,
-                "latency_ms": latency_ms,
-                "ttft_ms": ttft_ms,
-                "generation_time_s": round(elapsed_s, 2),
-                "tokens_generated": tokens_generated,
-                "tokens_per_sec": tps,
-                "timestamp": now,
-            })
+            sys_telemetry.update(
+                {
+                    "status": status_str,
+                    "latency_ms": latency_ms,
+                    "ttft_ms": ttft_ms,
+                    "generation_time_s": round(elapsed_s, 2),
+                    "tokens_generated": tokens_generated,
+                    "tokens_per_sec": tps,
+                    "timestamp": now,
+                }
+            )
             return sys_telemetry
 
         try:
-            from masteries.coding.inference.v3_orchestrator import v3_pipeline
+            from masteries.coding.inference.v4_orchestrator import v4_pipeline
 
             # Broadcast initial telemetry event (request started)
             init_metrics = get_current_metrics("processing")
             update_last_execution_metrics(init_metrics)
             yield f"data: {json.dumps({'type': 'telemetry', 'metrics': init_metrics})}\n\n"
 
-            for event in v3_pipeline(request.text):
+            for event in v4_pipeline(request.text, speed_mode=speed):
                 event_type = event.get("type")
-                
+
                 if event_type == "token":
                     content = event.get("content", "")
                     assistant_accumulated_text += content
                     tokens_generated += 1
-                    
+
                     if ttft_ms is None:
                         ttft_ms = int((time.time() - start_time) * 1000)
 
@@ -172,7 +177,7 @@ def generate(request: PredictRequest):
                 role="assistant",
                 text=assistant_accumulated_text,
                 source="actor-critic-ensemble",
-                status="Critic Validated"
+                status="Critic Validated",
             )
 
             # Final telemetry update
@@ -220,7 +225,7 @@ def generate(request: PredictRequest):
                 role="assistant",
                 text=response_text,
                 source="actor-critic-ensemble",
-                status="Validated"
+                status="Validated",
             )
 
             # Calculate metrics for fallback run

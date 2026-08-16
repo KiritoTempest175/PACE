@@ -11,7 +11,7 @@ class ActorModel:
 
     def __init__(
         self,
-        model_id="Qwen/Qwen2.5-Coder-7B-Instruct",
+        model_id="Qwen/Qwen2.5-Coder-3B-Instruct",
         device="cuda" if torch.cuda.is_available() else "cpu",
     ):
         self.device = device
@@ -135,7 +135,7 @@ class ActorModel:
 
 if __name__ == "__main__":
     print(
-        "Initializing Actor Model (this may take a while as it downloads the 7B model weights)..."
+        "Initializing Actor Model (this may take a while as it downloads the 3B model weights)..."
     )
     actor = ActorModel()
 

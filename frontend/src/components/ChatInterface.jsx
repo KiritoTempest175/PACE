@@ -455,9 +455,32 @@ export function ChatInterface({ type }) {
                   {isThinking ? (
                     <ThinkingIndicator status={msg.status || 'AI is thinking'} />
                   ) : (
-                    <pre className="assistant-text-content" style={{ fontFamily: 'var(--font-mono)' }}>
-                      {msg.text}
-                    </pre>
+                    <div className="assistant-text-content" style={{ fontFamily: 'var(--font-sans)', lineHeight: '1.6' }}>
+                      {(() => {
+                        if (!msg.text) return null;
+                        // Split by ```lang ... ```
+                        const parts = msg.text.split(/```(\w*)\n([\s\S]*?)```/g);
+                        return parts.map((part, i) => {
+                          if (i % 3 === 2) {
+                            // Code block content
+                            return (
+                              <div key={i} style={{ margin: '12px 0', borderRadius: 'var(--radius-md)', overflow: 'hidden', border: '1px solid var(--border-subtle)' }}>
+                                <div style={{ backgroundColor: 'var(--bg-card-hover)', padding: '6px 12px', fontSize: '11px', color: 'var(--text-muted)', textTransform: 'uppercase', borderBottom: '1px solid var(--border-subtle)' }}>
+                                  {parts[i-1] || 'code'}
+                                </div>
+                                <pre style={{ margin: 0, padding: '12px', overflowX: 'auto', backgroundColor: 'var(--bg-canvas)', color: 'var(--text-primary)', fontFamily: 'var(--font-mono)', fontSize: '13px' }}>
+                                  {part}
+                                </pre>
+                              </div>
+                            );
+                          } else if (i % 3 === 0) {
+                            // Normal text
+                            return <span key={i} style={{ whiteSpace: 'pre-wrap' }}>{part}</span>;
+                          }
+                          return null;
+                        });
+                      })()}
+                    </div>
                   )}
                   <div className="assistant-meta-bar">
                     <span className="critic-validated-badge">
