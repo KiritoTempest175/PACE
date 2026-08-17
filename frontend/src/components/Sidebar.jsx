@@ -14,6 +14,7 @@ import {
   BookOpen,
   Globe2
 } from 'lucide-react'
+import { telemetryStore } from '../utils/telemetryStore'
 
 const API_BASE = '/api'
 
@@ -25,6 +26,37 @@ export function Sidebar({ collapsed, setCollapsed, mobileOpen, setMobileOpen, on
 
   const [chatHistory, setChatHistory] = useState([])
   const [loading, setLoading] = useState(false)
+  const [vramPercent, setVramPercent] = useState(0)
+
+  useEffect(() => {
+    let isMounted = true
+    const fetchVram = async () => {
+      try {
+        const res = await fetch(`${API_BASE}/telemetry`)
+        if (res.ok && isMounted) {
+          const data = await res.json()
+          setVramPercent(data.vram_percent || 0)
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
+
+    fetchVram()
+    const interval = setInterval(fetchVram, 3000)
+
+    const unsubscribe = telemetryStore.subscribe((data) => {
+      if (data && data.vram_percent != null) {
+        setVramPercent(data.vram_percent)
+      }
+    })
+
+    return () => {
+      isMounted = false
+      clearInterval(interval)
+      unsubscribe()
+    }
+  }, [])
 
   // Fetch real conversation history from SQLite database backend
   const fetchConversations = useCallback(async () => {
@@ -154,7 +186,7 @@ export function Sidebar({ collapsed, setCollapsed, mobileOpen, setMobileOpen, on
 
           <div className="nav-group" style={{ marginTop: '12px' }}>
             {!collapsed && <div className="nav-group-title">History</div>}
-            
+
             {chatHistory.length === 0 && !loading && !collapsed && (
               <div style={{ fontSize: '12px', color: 'var(--text-muted)', padding: '8px 12px' }}>
                 No past sessions
@@ -220,7 +252,7 @@ export function Sidebar({ collapsed, setCollapsed, mobileOpen, setMobileOpen, on
                 <span>8.0 GB Max</span>
               </div>
               <div className="vram-bar-track">
-                <div className="vram-bar-fill" style={{ width: '42%' }} />
+                <div className="vram-bar-fill" style={{ width: `${vramPercent}%` }} />
               </div>
             </div>
           )}

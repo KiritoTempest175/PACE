@@ -1,5 +1,6 @@
 import torch
-from transformers import AutoModelForCausalLM, AutoTokenizer
+from transformers import AutoModelForCausalLM, AutoTokenizer, TextIteratorStreamer
+from threading import Thread
 
 
 class QwenCritic:
@@ -34,7 +35,7 @@ class QwenCritic:
             code (str): The source code to evaluate.
             context (str, optional): Additional context or requirements for the code.
 
-        Returns:
+        Yields:
             str: The model's critique.
         """
         system_prompt = (
@@ -61,23 +62,23 @@ class QwenCritic:
 
         model_inputs = self.tokenizer([text], return_tensors="pt").to(self.device)
 
-        with torch.no_grad():
-            generated_ids = self.model.generate(
-                **model_inputs,
-                max_new_tokens=1024,
-                do_sample=True,
-                temperature=0.3,  # Keep it relatively deterministic for code review
-            )
+        streamer = TextIteratorStreamer(
+            self.tokenizer, skip_prompt=True, skip_special_tokens=True
+        )
 
-        generated_ids = [
-            output_ids[len(input_ids) :]
-            for input_ids, output_ids in zip(model_inputs.input_ids, generated_ids)
-        ]
+        generation_kwargs = dict(
+            **model_inputs,
+            max_new_tokens=1024,
+            do_sample=True,
+            temperature=0.3,
+            streamer=streamer,
+        )
 
-        response = self.tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[
-            0
-        ]
-        return response
+        thread = Thread(target=self.model.generate, kwargs=generation_kwargs)
+        thread.start()
+
+        for new_text in streamer:
+            yield new_text
 
 
 if __name__ == "__main__":
@@ -96,8 +97,11 @@ def calculate_average(numbers):
 """
 
     print("\nCritiquing sample code...")
-    result = critic.critique(
+    result = ""
+    for token in critic.critique(
         sample_code, context="A function to calculate the average of a list of numbers."
-    )
+    ):
+        print(token, end="", flush=True)
+        result += token
     print("\n--- CRITIQUE RESULT ---")
     print(result)

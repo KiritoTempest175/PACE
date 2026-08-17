@@ -1,4 +1,3 @@
-import time
 import typing
 
 # Last recorded request performance metrics
@@ -10,6 +9,8 @@ _last_execution_telemetry: typing.Dict[str, typing.Any] = {
     "tokens_generated": None,
     "tokens_per_sec": None,
     "timestamp": None,
+    "actor_model": "None (Idle)",
+    "critic_model": "None (Idle)",
 }
 
 
@@ -51,8 +52,8 @@ def get_system_telemetry() -> dict:
     except Exception:
         pass
 
-    actor_model = "PACE Actor 164M"
-    critic_model = "Qwen 2.5-3B"
+    actor_model = _last_execution_telemetry.get("actor_model", "None (Idle)")
+    critic_model = _last_execution_telemetry.get("critic_model", "None (Idle)")
 
     return {
         "vram_allocated_mb": vram_allocated_mb,
