@@ -90,6 +90,11 @@ def v4_pipeline(user_prompt, max_iterations=1, speed_mode="pro"):
             
     yield {"type": "status", "content": "Ensemble Pipeline Complete."}
 
+
+# Alias for backward compatibility / streaming callers
+v4_stream_pipeline = v4_pipeline
+
+
 if __name__ == "__main__":
     print("Testing v4_pipeline directly...")
     test_prompt = "Write a Python function to calculate the factorial of a number."
