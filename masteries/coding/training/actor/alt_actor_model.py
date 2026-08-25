@@ -13,20 +13,25 @@ class ActorModel:
         self,
         model_id="Qwen/Qwen2.5-Coder-3B-Instruct",
         device="cuda" if torch.cuda.is_available() else "cpu",
+        backend="transformers",
     ):
         self.device = device
         self.model_id = model_id
-        print(f"Loading tokenizer from {model_id}...")
-        self.tokenizer = AutoTokenizer.from_pretrained(model_id)
+        self.backend = backend
+        if backend == "transformers":
+            print(f"Loading tokenizer from {model_id}...")
+            self.tokenizer = AutoTokenizer.from_pretrained(model_id)
 
-        print(f"Loading model {model_id} to {self.device}...")
-        self.model = AutoModelForCausalLM.from_pretrained(
-            model_id,
-            torch_dtype=torch.float16 if device == "cuda" else torch.float32,
-        )
-        self.model.to(device)
+            print(f"Loading model {model_id} to {self.device}...")
+            self.model = AutoModelForCausalLM.from_pretrained(
+                model_id,
+                torch_dtype=torch.float16 if device == "cuda" else torch.float32,
+            )
+            self.model.to(device)
+            print("Actor Model loaded successfully.")
+        else:
+            print(f"Actor Model initialized with backend '{backend}' using model '{model_id}'.")
 
-        print("Actor Model loaded successfully.")
 
     def generate_code(self, prompt: str) -> str:
         """
@@ -51,7 +56,18 @@ class ActorModel:
             {"role": "user", "content": user_prompt},
         ]
 
+        if self.backend == "ollama":
+            from masteries.services.ollama_service import query_ollama_stream
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ]
+            for chunk in query_ollama_stream(messages=messages, model=self.model_id):
+                yield chunk
+            return
+
         text = self.tokenizer.apply_chat_template(
+
             messages, tokenize=False, add_generation_prompt=True
         )
 
@@ -107,7 +123,18 @@ class ActorModel:
             {"role": "user", "content": user_prompt},
         ]
 
+        if self.backend == "ollama":
+            from masteries.services.ollama_service import query_ollama_stream
+            messages = [
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ]
+            for chunk in query_ollama_stream(messages=messages, model=self.model_id):
+                yield chunk
+            return
+
         text = self.tokenizer.apply_chat_template(
+
             messages, tokenize=False, add_generation_prompt=True
         )
 

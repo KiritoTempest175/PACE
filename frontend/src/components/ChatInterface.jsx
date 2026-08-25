@@ -70,6 +70,7 @@ export function ChatInterface({ type }) {
   const [input, setInput] = useState('')
   const [messages, setMessages] = useState([])
   const [loading, setLoading] = useState(false)
+  const [streamingMsgId, setStreamingMsgId] = useState(null)
   const [historyLoading, setHistoryLoading] = useState(false)
   const [historyError, setHistoryError] = useState(null)
   const [speedMode, setSpeedMode] = useState('pro') // 'pro' | 'fast'
@@ -78,6 +79,7 @@ export function ChatInterface({ type }) {
   const activeChatIdRef = useRef(activeChatId)
   const abortControllerRef = useRef(null)
   const messagesEndRef = useRef(null)
+  const isStreamingRef = useRef(false)
 
   const renderedWelcome = useMemo(() => mode.welcome.replaceAll('**', ''), [mode.welcome])
 
@@ -106,7 +108,11 @@ export function ChatInterface({ type }) {
     abortControllerRef.current = controller
 
     const loadConversation = async () => {
+      // Don't reload history while a stream is actively in progress
+      if (isStreamingRef.current) return
+
       setHistoryLoading(true)
+
       setHistoryError(null)
       setMessages([]) // Don't temporarily show messages from previous conversation
 
@@ -190,9 +196,11 @@ export function ChatInterface({ type }) {
     setMessages((prev) => [...prev, { id: messageId, role: 'user', text: value }])
     setInput('')
     setLoading(true)
+    isStreamingRef.current = true
 
     // Add assistant message streaming placeholder
     const assistantMsgId = (Date.now() + 1).toString()
+    setStreamingMsgId(assistantMsgId)
     setMessages((prev) => [
       ...prev,
       {
@@ -300,6 +308,8 @@ export function ChatInterface({ type }) {
       )
     } finally {
       setLoading(false)
+      setStreamingMsgId(null)
+      isStreamingRef.current = false
     }
   }
 
@@ -438,7 +448,7 @@ export function ChatInterface({ type }) {
 
         {/* Messages Stream */}
         {!historyLoading && messages.map((msg, index) => {
-          const isLastAssistantMsg = loading && index === messages.length - 1 && msg.role === 'assistant'
+          const isLastAssistantMsg = loading && msg.id === streamingMsgId
           const isThinking = isLastAssistantMsg && (!msg.text || msg.text === '')
 
           return msg.role === 'user' ? (
