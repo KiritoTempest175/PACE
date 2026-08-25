@@ -24,7 +24,7 @@ export function HardwareMonitor() {
   // Store real telemetry history points for SVG sparkline
   const [historyPoints, setHistoryPoints] = useState([])
 
-  // Fetch real snapshot on mount
+  // Fetch real snapshot on mount and poll periodically
   useEffect(() => {
     const fetchTelemetry = async () => {
       try {
@@ -40,11 +40,13 @@ export function HardwareMonitor() {
           }
         }
       } catch (e) {
-        console.error('Failed to fetch initial telemetry:', e)
+        console.error('Failed to fetch telemetry:', e)
       }
     }
 
     fetchTelemetry()
+    const interval = setInterval(fetchTelemetry, 3000)
+    return () => clearInterval(interval)
   }, [])
 
   // Subscribe to real-time telemetry events from AI execution
@@ -142,7 +144,7 @@ export function HardwareMonitor() {
         <div className="metric-tile">
           <span className="metric-tile-label">Local Throughput</span>
           <span className="metric-tile-value amber">
-            {telemetry.tokens_per_sec != null ? `${telemetry.tokens_per_sec} tok/s` : 'N/A'}
+            {telemetry.tokens_per_sec != null ? `${isProcessing ? telemetry.tokens_per_sec : 0} tok/s` : 'N/A'}
           </span>
         </div>
       </div>
@@ -209,7 +211,7 @@ export function HardwareMonitor() {
           <div
             className="vram-bar-fill"
             style={{
-              width: telemetry.vram_percent != null ? `${Math.max(0.1, telemetry.vram_percent)}%` : '0%',
+              width: telemetry.vram_percent != null ? `${Math.min(100, Math.max(0.1, telemetry.vram_percent))}%` : '0%',
             }}
           />
         </div>

@@ -25,6 +25,10 @@ from masteries.services.database import (
     add_message,
 )
 
+import threading
+
+_generate_lock = threading.Lock()
+
 router = APIRouter()
 
 
@@ -107,11 +111,18 @@ def generate(request: PredictRequest):
     add_message(conversation_id, role="user", text=request.text)
 
     def event_stream():
+        if not _generate_lock.acquire(blocking=False):
+            yield f"data: {json.dumps({'type': 'status', 'content': 'Server is currently busy with another request. Please wait a moment and try again.'})}\n\n"
+            yield f"data: {json.dumps({'type': 'done'})}\n\n"
+            return
+
         start_time = time.time()
         ttft_ms = None
         tokens_generated = 0
         assistant_accumulated_text = ""
         last_telemetry_emit = 0.0
+        _active_actor_model = "Loading..."
+        _active_critic_model = "Loading..."
 
         # Send initial event with conversation_id
         yield f"data: {json.dumps({'type': 'init', 'conversation_id': conversation_id})}\n\n"
@@ -135,19 +146,49 @@ def generate(request: PredictRequest):
                     "tokens_generated": tokens_generated,
                     "tokens_per_sec": tps,
                     "timestamp": now,
+                    "actor_model": _active_actor_model,
+                    "critic_model": _active_critic_model,
                 }
             )
             return sys_telemetry
 
         try:
-            from masteries.coding.inference.v4_orchestrator import v4_pipeline
+            if mode == "literacy":
+                from masteries.literacy.inference.v4_orchestrator import (
+                    literacy_pipeline as active_pipeline,
+                    get_actor,
+                    get_critic,
+                )
+            elif mode == "research":
+                from masteries.research.inference.v4_orchestrator import (
+                    research_pipeline as active_pipeline,
+                    get_actor,
+                    get_critic,
+                )
+            else:
+                from masteries.coding.inference.v4_orchestrator import (
+                    v4_pipeline as active_pipeline,
+                    get_actor,
+                    get_critic,
+                )
+
+            # Extract model IDs dynamically
+            actor = get_actor()
+            _active_actor_model = getattr(actor, "model_id", actor.__class__.__name__)
+
+            _active_critic_model = "None (Fast Mode)"
+            if speed == "pro":
+                critic = get_critic()
+                _active_critic_model = getattr(
+                    critic, "model_id", critic.__class__.__name__
+                )
 
             # Broadcast initial telemetry event (request started)
             init_metrics = get_current_metrics("processing")
             update_last_execution_metrics(init_metrics)
             yield f"data: {json.dumps({'type': 'telemetry', 'metrics': init_metrics})}\n\n"
 
-            for event in v4_pipeline(request.text, speed_mode=speed):
+            for event in active_pipeline(request.text, speed_mode=speed):
                 event_type = event.get("type")
 
                 if event_type == "token":

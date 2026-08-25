@@ -80,6 +80,7 @@ export function ChatInterface({ type }) {
   const abortControllerRef = useRef(null)
   const messagesEndRef = useRef(null)
   const isStreamingRef = useRef(false)
+  const skipNextLoadRef = useRef(false)
 
   const renderedWelcome = useMemo(() => mode.welcome.replaceAll('**', ''), [mode.welcome])
 
@@ -97,6 +98,11 @@ export function ChatInterface({ type }) {
       setMessages([])
       setHistoryLoading(false)
       setHistoryError(null)
+      return
+    }
+
+    if (skipNextLoadRef.current) {
+      skipNextLoadRef.current = false
       return
     }
 
@@ -247,6 +253,7 @@ export function ChatInterface({ type }) {
                 if (data.type === 'init') {
                   if (data.conversation_id && data.conversation_id !== currentConversationId) {
                     currentConversationId = data.conversation_id
+                    skipNextLoadRef.current = true
                     // Update URL without full page reload
                     navigate(`/${type}?chat=${currentConversationId}`, { replace: true })
                     // Refresh sidebar

@@ -1,6 +1,6 @@
 # 🚀 PACE: Pipelined Actor-Critic Ensemble
 
-> **High-Performance AI Microservice Platform for Local Code Generation, Document Literacy & Research Synthesis**
+> **High-Performance Heterogeneous Micro-Agent AI Microservice for Local Code Generation, Document Literacy & Research Synthesis**
 
 ![Python](https://img.shields.io/badge/Python-3.10%2B-blue?style=for-the-badge&logo=python)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.110.0-009688?style=for-the-badge&logo=fastapi)
@@ -11,9 +11,15 @@
 
 ---
 
-## 📌 Executive Summary
+## 📌 Core Thesis & Executive Summary
 
-**PACE (Pipelined Actor-Critic Ensemble)** is an advanced, lightweight, low-latency AI microservice designed to deliver high-integrity AI model inference, interactive code generation, document literacy synthesis, and research exploration on consumer hardware (e.g., NVIDIA RTX 4060 8GB VRAM or CPU fallbacks).
+An ensemble of specialized micro-models can eliminate AI hallucinations and outperform massive monolithic LLMs through a rigorous **Actor-Critic validation loop**. 
+
+**PACE (Pipelined Actor-Critic Ensemble)** is engineered from the ground up to operate within strict hardware constraints while delivering high-integrity AI model inference, interactive code generation, document literacy synthesis, and research exploration on consumer hardware.
+
+- **Target Hardware**: NVIDIA RTX 4060 (8GB VRAM), 16GB RAM / CPU Fallback
+- **Core Constraint**: Never exceed 8GB VRAM; hot-swap models dynamically
+- **Scope**: Engineering Microservice Platform + Published Research System
 
 By pairing an **Actor model** (responsible for initial token generation) with a **Critic model** (responsible for AST analysis, safety auditing, and iterative logical correction), PACE guarantees higher quality code outputs and validated responses while maintaining real-time performance telemetry.
 
@@ -21,11 +27,14 @@ By pairing an **Actor model** (responsible for initial token generation) with a 
 
 ## 🗺 Table of Contents
 
+- [Core Thesis & Executive Summary](#-core-thesis--executive-summary)
 - [Overview & Key Features](#-overview--key-features)
 - [Architecture & Workflow](#-architecture--workflow)
+- [Masteries Overview (Domain Experts)](#-masteries-overview-domain-experts)
 - [System Components & Repository Map](#-system-components--repository-map)
-- [Masteries (Domain Engines)](#-masteries-domain-engines)
+- [Security Architecture](#-security-architecture)
 - [Hardware & Telemetry Engine](#-hardware--telemetry-engine)
+- [Hardware Budget Analysis](#-hardware-budget-analysis)
 - [Installation & Setup](#-installation--setup)
 - [API Reference](#-api-reference)
 - [Docker & Containerized Deployment](#-docker--containerized-deployment)
@@ -82,13 +91,23 @@ flowchart TD
     Router -->|"Live Tokens + Telemetry SSE"| UI
 ```
 
-### Execution Flow:
-1. **Request Ingestion**: User submits a prompt via the frontend chat interface to `/generate`.
-2. **Conversation Persistence**: The request is logged into `pace.db`.
-3. **Actor Stream**: The Actor model streams initial generated code or text response tokens.
-4. **Critic Audit**: In **Pro** mode, the Critic model evaluates the code for bugs, AST compliance, and safety concerns.
-5. **Sandbox Verification**: If needed, the generated code runs inside `core/sandbox/executor.py` against test harnesses.
-6. **SSE Broadcast**: Tokens, pipeline status updates, and hardware telemetry (latency, VRAM, TPS) stream back to the UI in real time.
+### Request Flow Modes:
+- **Fast Mode (Latency-Optimized)**: Tokenize $\rightarrow$ Load Actor $\rightarrow$ Inference $\rightarrow$ Return Response stream.
+- **Pro Mode (Accuracy-Optimized)**: Tokenize $\rightarrow$ Load Actor $\rightarrow$ Generate initial code/text $\rightarrow$ Load Critic $\rightarrow$ Evaluate AST & logic $\rightarrow$ (If Fail: Inject Feedback into Prompt, Loop back to Actor. Max 5 iterations) $\rightarrow$ Return verified output.
+
+---
+
+## 🎯 Masteries Overview (Domain Experts)
+
+The system is divided into three domain experts ("Masteries"). Each Mastery consists of a paired **Actor** (generator) and **Critic** (validator), forming a self-correcting loop.
+
+| Mastery | Actor (Generator) | Critic (Validator) | Objective Verification |
+|---|---|---|---|
+| 💻 **Coding** | Writes code from prompt/spec | Checks syntax, logic, test-pass probability | Unit tests execute and pass in isolated sandbox |
+| 📖 **Literacy** | Summarizes, rewrites, answers from local text | Checks factual consistency, hallucination | Claim-to-source sentence mapping (NLI) |
+| 🔬 **Research** | Synthesizes live web/academic sources into reviews | Verifies citation existence and claim accuracy | Regex checks citation IDs; NLI verifies abstract match |
+
+**Critical Principle:** Each Critic has an objective verification mechanism to ensure factual and logical validity.
 
 ---
 
@@ -117,7 +136,7 @@ PACE/
 │   │   ├── router.py         # Main routes (/generate, /telemetry, /conversations, /upload)
 │   │   └── schemas.py        # API Request/Response schemas
 │   ├── coding/               # Coding Mastery Engine
-│   │   └── inference/        # Actor-Critic Orchestrators (v3, v4), generate & predict
+│   │   └── inference/        # Actor-Critic Orchestrators (v4), generate & predict
 │   ├── literacy/             # Technical document processing & corpus handling
 │   ├── research/             # Literature synthesis & attention analysis engine
 │   └── services/             # Telemetry, Database, Ollama, PDF Parser, Chunker
@@ -131,19 +150,14 @@ PACE/
 
 ---
 
-## 🎯 Masteries (Domain Engines)
+## 🔒 Security Architecture
 
-PACE divides AI task handling into specialized **Masteries**:
-
-1. 💻 **Coding Mastery (`masteries/coding`)**:
-   - Orchestrates code generation, AST parsing, bug fixing, and unit test validation.
-   - Dual-engine fallback: prioritizes local **Ollama** models (e.g. `llama3.2:1b`) with fallback to local PyTorch HuggingFace transformers (`ActorModel` & `QwenCritic`).
-
-2. 📖 **Literacy Mastery (`masteries/literacy`)**:
-   - Processes PDF technical documentation, extracts structured text (`masteries/services/pdfparser.py`), chunks content (`chunker.py`), and runs Natural Language Inference (NLI).
-
-3. 🔬 **Research Mastery (`masteries/research`)**:
-   - Synthesizes technical literature, analyzes state-space vs self-attention memory trade-offs, and audits KV-cache constraints for long-context research inputs.
+| Layer | Threat | Mitigation |
+|---|---|---|
+| **Input Sanitization** | Prompt injection, oversized payloads | Max token limits, regex filters, payload size caps |
+| **Model Runtime** | Adversarial inputs causing OOM | Input caps, execution timeouts, VRAM watchdog thread |
+| **API Access** | Quota abuse, unauthorized requests | CORS domain policies, rate limiting, request validation |
+| **Code Execution** | Arbitrary code execution | **Isolated Sandboxing**: Isolated Python subprocess with read/write temp isolation, CPU timeouts |
 
 ---
 
@@ -155,7 +169,19 @@ The PACE Telemetry Engine (`masteries/services/telemetry.py`) provides real-time
 - **Host Metrics**: CPU utilization %, RAM usage (MB).
 - **Inference Metrics**: Latency (ms), Time-To-First-Token (TTFT in ms), execution duration (seconds), tokens generated, generation speed (Tokens/Sec).
 
-All metrics stream live to the frontend dashboard over Server-Sent Events (SSE).
+---
+
+## 💡 Hardware Budget Analysis (RTX 4060 8GB)
+
+| Component | Fast Tier (GB) | Pro Tier (GB) |
+|---|---|---|
+| **Actor Model** (~3B params, FP16) | ~4.5 | ~4.5 |
+| **Critic Model** (~1.5B params, FP16) | — | ~2.5 |
+| **Activation Cache** (max sequence) | ~0.8 | ~0.8 |
+| **PyTorch CUDA Overhead** | ~1.2 | ~1.2 |
+| **System / Display Reserve** | ~0.5 | ~0.5 |
+
+> **Key Insight**: PyTorch CUDA context initialization creates an initial ~1.2GB floor. Hot-swapping models ensures Peak VRAM usage remains strictly under the 8GB limit.
 
 ---
 
@@ -223,8 +249,6 @@ Open [http://localhost:5173](http://localhost:5173) in your browser to access th
 ---
 
 ## 📡 API Reference
-
-### Core Endpoints
 
 | Endpoint | Method | Description |
 | :--- | :--- | :--- |
