@@ -1,1 +1,1 @@
-Diagnose v0.2 frozen local-backend startup with console logs; do not publish before smoke passes.
+Build PACE Desktop 0.2 with bundled sidecar, smoke test, Windows process-tree cleanup, React startup fix and full-source archive. 2026-10-09.
