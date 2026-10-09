@@ -1,1 +1,1 @@
-Rerun Windows Tauri v2 NSIS and source release after tauri-build dependency fix, 2026-10-09.
+Build PACE v0.2.0 Windows desktop with bundled Python FastAPI sidecar, smoke tests, NSIS installer and complete source archives. 2026-10-09.
