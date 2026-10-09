@@ -46,6 +46,8 @@ def make_app(key: str):
     from fastapi import Request
     from fastapi.responses import JSONResponse
     from backend.main import app
+    from desktop.model_manager import router as desktop_setup_router
+    app.include_router(desktop_setup_router)
 
     @app.middleware("http")
     async def desktop_auth(request: Request, call_next):
