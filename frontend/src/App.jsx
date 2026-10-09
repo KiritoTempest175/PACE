@@ -32,7 +32,6 @@ function App(){
  const [speed,setSpeed]=useState('fast');
  const [error,setError]=useState('');
  const [boot,setBoot]=useState(0);
- const [sandboxAvailable,setSandboxAvailable]=useState(false);
  const [code,setCode]=useState('print(42)');
  const [runningCode,setRunningCode]=useState(false);
  const [codeResult,setCodeResult]=useState(null);
@@ -45,7 +44,7 @@ function App(){
  const theme=useTheme();
  const statusLabel=online==='online'?'API online':online==='waking'?'Waking up API':online==='checking'?'Connecting':'API unavailable';
  const refreshList=useCallback(async()=>{try{setConversations(await json('/conversations'));}catch(e){setNotice(`Could not load chats: ${e.message}`);}},[]);
- useEffect(()=>{let cancelled=false;setOnline('checking');const connect=async()=>{try{await initDesktopRuntime();if(cancelled)return;if(IS_PACE_DESKTOP)setDesktopEndpoint(getApiBase());const data=await wakeServer(()=>!cancelled&&setOnline('waking'));if(cancelled)return;setOnline('online');setProvider(data.ai_provider||'disabled');setSandboxAvailable(Boolean(data.sandbox_available));await refreshList();if(IS_PACE_DESKTOP&&desktopConnectionKind()==='local'&&!wizardShown.current){const state=await json('/desktop/setup/status');if(!state.running||!state.actor_ready){wizardShown.current=true;setDesktopSetupOpen(true);}}}catch(e){if(!cancelled){setOnline('offline');setError(e.message||'Local backend could not start');}}};void connect();return()=>{cancelled=true;};},[boot,refreshList]);
+ useEffect(()=>{let cancelled=false;setOnline('checking');const connect=async()=>{try{await initDesktopRuntime();if(cancelled)return;if(IS_PACE_DESKTOP)setDesktopEndpoint(getApiBase());const data=await wakeServer(()=>!cancelled&&setOnline('waking'));if(cancelled)return;setOnline('online');setProvider(data.ai_provider||'disabled');await refreshList();if(IS_PACE_DESKTOP&&desktopConnectionKind()==='local'&&!wizardShown.current){const state=await json('/desktop/setup/status');if(!state.running||!state.actor_ready){wizardShown.current=true;setDesktopSetupOpen(true);}}}catch(e){if(!cancelled){setOnline('offline');setError(e.message||'Local backend could not start');}}};void connect();return()=>{cancelled=true;};},[boot,refreshList]);
  useEffect(()=>{if(online!=='online'||!telemetryOpen)return;let live=true;const refresh=()=>json('/telemetry').then(v=>live&&setTelemetry(v)).catch(()=>live&&setTelemetry(null));refresh();const timer=setInterval(refresh,12000);return()=>{live=false;clearInterval(timer);};},[telemetryOpen,online]);
  useEffect(()=>{scrollRef.current?.scrollIntoView({behavior:'smooth'});},[messages]);
  useEffect(()=>()=>{pythonRunRef.current?.cancel();},[]);
