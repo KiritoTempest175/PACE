@@ -24,7 +24,7 @@ async def lifespan(app: FastAPI):
 
 app=FastAPI(title='PACE API',version='2.0.0',lifespan=lifespan)
 app.add_middleware(RequestBodyLimit)
-app.add_middleware(CORSMiddleware,allow_origins=settings.allowed_origins,allow_credentials=False,allow_methods=['GET','POST','DELETE','OPTIONS'],allow_headers=['Content-Type','X-PACE-Session'])
+app.add_middleware(CORSMiddleware,allow_origins=settings.allowed_origins,allow_credentials=False,allow_methods=['GET','POST','DELETE','OPTIONS'],allow_headers=['Content-Type','X-PACE-Session','X-PACE-Desktop-Key'])
 _hits:dict[str,deque[float]]=defaultdict(deque)
 _lock=Lock()
 
