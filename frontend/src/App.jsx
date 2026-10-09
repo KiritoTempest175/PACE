@@ -27,7 +27,6 @@ function App(){
  const [speed,setSpeed]=useState('fast');
  const [error,setError]=useState('');
  const [boot,setBoot]=useState(0);
- const [sandboxAvailable,setSandboxAvailable]=useState(false);
  const [code,setCode]=useState('print(42)');
  const [runningCode,setRunningCode]=useState(false);
  const [codeResult,setCodeResult]=useState(null);
@@ -40,7 +39,7 @@ function App(){
  const theme=useTheme();
  const statusLabel=online==='online'?'API online':online==='waking'?'Waking up API':online==='checking'?'Connecting':'API unavailable';
  const refreshList=useCallback(async()=>{try{setConversations(await json('/conversations'));}catch(e){setNotice(`Could not load chats: ${e.message}`);}},[]);
- useEffect(()=>{let cancelled=false;setOnline('checking');wakeServer(()=>!cancelled&&setOnline('waking')).then(async data=>{if(cancelled)return;setOnline('online');setProvider(data.ai_provider||'disabled');setSandboxAvailable(Boolean(data.sandbox_available));await refreshList();}).catch(()=>!cancelled&&setOnline('offline'));return()=>{cancelled=true;};},[boot,refreshList]);
+ useEffect(()=>{let cancelled=false;setOnline('checking');wakeServer(()=>!cancelled&&setOnline('waking')).then(async data=>{if(cancelled)return;setOnline('online');setProvider(data.ai_provider||'disabled');await refreshList();}).catch(()=>!cancelled&&setOnline('offline'));return()=>{cancelled=true;};},[boot,refreshList]);
  useEffect(()=>{if(online!=='online'||!telemetryOpen)return;let live=true;const refresh=()=>json('/telemetry').then(v=>live&&setTelemetry(v)).catch(()=>live&&setTelemetry(null));refresh();const timer=setInterval(refresh,12000);return()=>{live=false;clearInterval(timer);};},[telemetryOpen,online]);
  useEffect(()=>{scrollRef.current?.scrollIntoView({behavior:'smooth'});},[messages]);
  useEffect(()=>()=>{pythonRunRef.current?.cancel();},[]);
