@@ -42,6 +42,23 @@ jobs:
             echo '::error::Add the GitHub repository secret PACE_RELEASE_TOKEN (fine-grained GitHub PAT with Contents: Read and write).'
             exit 1
           fi
+      - name: Check release token identity and repository access
+        env:
+          GH_TOKEN: ${{ secrets.PACE_RELEASE_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo 'Checking the GitHub account and access for the stored release token (token value not shown).'
+          login=$(gh api user --jq '.login' 2>/dev/null) || { echo '::error::PACE_RELEASE_TOKEN could not authenticate with GitHub. Regenerate the token.'; exit 1; }
+          echo "Token account: $login"
+          access=$(gh api "repos/$GITHUB_REPOSITORY" --jq '.permissions // {}' 2>/dev/null) || { echo '::error::Token cannot access KiritoTempest175/PACE. Select repository KiritoTempest175/PACE under fine-grained token repository access.'; exit 1; }
+          echo "Repository permission summary: $access"
+          can_push=$(printf '%s' "$access" | jq -r '.push // false')
+          if [ "$can_push" != 'true' ]; then
+            echo '::error::The PAT has no write permission on this repo. Edit the fine-grained PAT: Resource owner KiritoTempest175, repository PACE, Contents=Read and write.'
+            exit 1
+          fi
+          echo 'Repository reports push access. Trying GitHub Releases endpoint next.'
       - name: Create public desktop prerelease
         env:
           GH_TOKEN: ${{ secrets.PACE_RELEASE_TOKEN }}
