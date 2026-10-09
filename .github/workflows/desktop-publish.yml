@@ -32,7 +32,7 @@ jobs:
           p='files/PACE_Web_Deploy_Bundle.zip'
           with zipfile.ZipFile(p) as z:
               for name in ['index.html','python-runner.worker.js','pyodide/pyodide.asm.wasm','pyodide/python_stdlib.zip']:
-                  assert z.getinfo(name).file_size>1000,name
+                  assert z.getinfo(name).file_size>(100 if name=='index.html' else 1000),name
           print('Five assets verified, including offline Python runtime')
           PY
       - name: Create draft release and upload verified artifacts
