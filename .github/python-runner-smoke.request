@@ -1,1 +1,1 @@
-Test pinned Pyodide runtime downloaded into web/desktop bundle; run stdout, error, timeout, recovery in real Chromium. 2026-10-09.
+Run pinned Pyodide browser smoke after resolving conditional JSX parser failure; verify 42, error, infinite loop timeout. 2026-10-09T18:20Z.
