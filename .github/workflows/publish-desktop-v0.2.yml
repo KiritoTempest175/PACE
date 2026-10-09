@@ -1,0 +1,46 @@
+name: Publish verified PACE Desktop 0.2
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/publish-desktop-v0.2.request
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download previously tested Windows installer and source bundles
+        uses: actions/download-artifact@v4
+        with:
+          name: PACE-Desktop-Windows-and-Source
+          run-id: 37948009714
+          repository: KiritoTempest175/PACE
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: assets
+      - name: Verify all four release assets
+        run: |
+          set -euo pipefail
+          ls -alh assets
+          test -f 'assets/PACE_Web_Source.zip'
+          test -f 'assets/PACE_Desktop_Source.zip'
+          test -f 'assets/PACE_Complete_Source.zip'
+          test -f 'assets/frontend/src-tauri/target/release/bundle/nsis/PACE AI Workspaces_0.2.0_x64-setup.exe'
+          bytes=$(stat -c %s 'assets/frontend/src-tauri/target/release/bundle/nsis/PACE AI Workspaces_0.2.0_x64-setup.exe')
+          test "$bytes" -gt 10000000
+      - name: Create public desktop prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag=desktop-v0.2.0
+          gh release create "$tag" --repo "$GITHUB_REPOSITORY" --target a38cc25d501395afb1915b4dd0caf9ed76089886 --prerelease --title 'PACE Desktop 0.2.0 (Windows + bundled API)' --notes 'Replaces deprecated frontend-only v0.1.0. Includes local FastAPI, SQLite and PDF processing; a separate Ollama installation and model download are required for offline AI. Unsigned Windows installer; GUI acceptance testing remains outstanding.'
+          gh release upload "$tag" --repo "$GITHUB_REPOSITORY" \
+            'assets/frontend/src-tauri/target/release/bundle/nsis/PACE AI Workspaces_0.2.0_x64-setup.exe' \
+            assets/PACE_Web_Source.zip assets/PACE_Desktop_Source.zip assets/PACE_Complete_Source.zip
+          gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json url,isDraft,isPrerelease,assets
