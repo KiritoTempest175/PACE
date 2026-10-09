@@ -1,1 +1,1 @@
-Validate built PACE 0.3.0 Windows setup installs distinct desktop GUI/backend and auto-launches the bundled API. 2026-10-09.
+Install PACE 0.4.0 Windows NSIS release candidate, confirm two executables and automatic FastAPI sidecar launch. 2026-10-09.
