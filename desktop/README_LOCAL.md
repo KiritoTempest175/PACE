@@ -1,44 +1,40 @@
-# PACE Desktop 0.2 — bundled local backend
+# PACE Desktop v0.3 — Windows setup
 
-The **Windows installer includes the Python FastAPI backend as an executable
-sidecar**. The user does not need to install Python or download separate backend
-source files to use local conversation history and PDF extraction. Tauri starts
-the sidecar on a random 127.0.0.1 TCP port and terminates it on exit.
+The Windows installer contains the PACE Desktop React/Tauri interface, the
+local Python FastAPI executable, SQLite conversation storage and PDF parsing.
+You do not need to extract Python or React source files into the install folder.
 
-Local user data is stored under the application's Windows Local AppData
-directory. A per-launch capability header restricts access to the embedded
-server; the server never listens on an external network interface.
+1. Install the Windows .exe and open PACE.
+2. The included local API launches automatically.
+3. On first launch PACE detects Ollama. If it is missing, choose
+   **Download & install Ollama**. PACE downloads the official Windows
+   installer using HTTPS and opens its normal setup wizard after your click.
+4. Complete Ollama setup and select **Refresh status** in PACE.
+   If required, select **Start Ollama**.
+5. Pick any listed **Generator / Actor** model (1B–8B), then select
+   **Download & select model**. Download progress appears inside PACE.
+6. For **Pro**, select a **Reviewer / Critic** model. A separate AI model
+   reviews the Generator draft, but this is not formal code verification.
 
-## AI modes
+Models can be downloaded for free; their model-specific licenses, memory
+needs and file sizes vary. Initial downloads need Internet and disk space.
+Local inference can be used without the hosted API after setup. Hosted mode
+remains available under Preferences.
 
-- **Local (default):** The bundled backend calls an Ollama instance running
-  at `http://127.0.0.1:11434`. Users must separately install Ollama and pull
-  `qwen2.5-coder:1.5b`. PACE does not ship model weights.
-- **Hosted:** The existing Render + Hugging Face services are accessible from
-  Preferences when the user has Internet connectivity.
+SQLite and the selected model configuration live under Windows Local AppData,
+not the installation directory. Ollama stores its model weights in its own
+user folder. Uninstalling PACE does not silently delete model downloads.
 
-Without Ollama, local chat history, PDF upload and workspace navigation work,
-but **AI inference returns an honest unavailable error**, not a fake answer.
-The Python execution sandbox is disabled in the desktop bundle.
+Preserved: Coding, Literacy/PDF, Research, Fast, Pro, chat history, document
+upload, dark/light themes and hosted/local API selection.
 
-## Building from source
+This package does not secretly bundle Ollama or large model weights. Its
+first-run wizard installs Ollama with explicit user consent and downloads
+the user's selected models, without terminal commands. These models are
+pretrained Ollama models; the original independently trained PACE actor
+and critic weights are not included.
 
-On Windows install Python 3.11, Node.js 22, Rust stable, Visual Studio C++
-Build Tools, and WebView2. From the repository root:
-
-```powershell
-python -m pip install -r desktop/requirements-local.txt
-python -m PyInstaller --noconfirm --clean --onefile --noconsole --name pace-api --paths . --collect-all pymupdf --hidden-import fitz --hidden-import masteries.services.ollama_provider --hidden-import masteries.services.telemetry desktop/backend_entry.py
-New-Item -Type Directory -Force frontend/src-tauri/binaries | Out-Null
-Copy-Item dist/pace-api.exe frontend/src-tauri/binaries/pace-api-x86_64-pc-windows-msvc.exe
-python desktop/smoke_backend.py dist/pace-api.exe
-
-cd frontend
-npm ci
-npx --yes @tauri-apps/cli@2.12.1 icon src-tauri/icons/icon-source.svg
-npx --yes @tauri-apps/cli@2.12.1 build --bundles nsis
-```
-
-The updated GitHub release workflow performs these steps, verifies the NSIS
-installer and publishes complete source archives. The Windows installer is
-unsigned and should be treated as a prerelease pending manual GUI testing.
+For developers: fork feature/tauri-desktop or download the complete source
+archive. Requirements for Windows builds include Node 22, Rust, Python 3.11,
+Windows C++ Build Tools and WebView2. GitHub Actions freezes the Python
+backend and builds the NSIS installer. The installer is unsigned.
