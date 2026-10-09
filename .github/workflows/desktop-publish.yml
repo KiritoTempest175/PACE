@@ -18,16 +18,17 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          tag='desktop-v0.1.0'
+          tag='desktop-v0.2.0'
           gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json assets,isDraft,tagName > /tmp/pace-release.json
           jq -e '.isDraft == true' /tmp/pace-release.json > /dev/null
           jq -e '[.assets[].name] | any(. == "PACE_Web_Source.zip")' /tmp/pace-release.json > /dev/null
           jq -e '[.assets[].name] | any(. == "PACE_Desktop_Source.zip")' /tmp/pace-release.json > /dev/null
+          jq -e '[.assets[].name] | any(. == "PACE_Complete_Source.zip")' /tmp/pace-release.json > /dev/null
           jq -e '[.assets[].name] | any(endswith("-setup.exe"))' /tmp/pace-release.json > /dev/null
           jq -r '.assets[] | [.name, (.size|tostring)] | @tsv' /tmp/pace-release.json
       - name: Publish as a public prerelease
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release edit desktop-v0.1.0 --repo "$GITHUB_REPOSITORY" --draft=false --prerelease
-          gh release view desktop-v0.1.0 --repo "$GITHUB_REPOSITORY" --json isDraft,isPrerelease,url,assets
+          gh release edit desktop-v0.2.0 --repo "$GITHUB_REPOSITORY" --draft=false --prerelease
+          gh release view desktop-v0.2.0 --repo "$GITHUB_REPOSITORY" --json isDraft,isPrerelease,url,assets
