@@ -2,6 +2,11 @@ name: Deploy Hugging Face AI Space
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - phase2/production-hardening-20261009
+    paths:
+      - ai-service/.deploy-request
 
 permissions:
   contents: read
