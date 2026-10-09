@@ -77,12 +77,21 @@ def main():
             assert (Path(directory)/"pace.sqlite3").exists()
             print("PASS: frozen backend startup, scoped auth, SQLite persistence, CRUD and cleanup")
         finally:
-            proc.terminate()
+            # PyInstaller --onefile spawns an extraction parent + child.
+            # On Windows kill the entire tree or the frozen child keeps SQLite
+            # locked after the test process exits.
+            if os.name == "nt":
+                subprocess.run(
+                    ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+                    capture_output=True, check=False, timeout=15
+                )
+            else:
+                proc.terminate()
             try:
-                proc.wait(timeout=8)
+                proc.wait(timeout=10)
             except subprocess.TimeoutExpired:
                 proc.kill()
-                proc.wait(timeout=8)
+                proc.wait(timeout=10)
 
 if __name__=="__main__":
     main()
