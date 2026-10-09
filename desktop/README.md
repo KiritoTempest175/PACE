@@ -3,56 +3,39 @@
 This folder accompanies the Tauri v2 Windows client under `frontend/src-tauri/`.
 It is intentionally isolated on `feature/tauri-desktop`, not the web production branch.
 
-## What works
+## What PACE Desktop installs
 
-- The same PACE React UI, packaged as a Windows WebView2 desktop app
-- Coding, Literacy PDF uploads, Research and persisted conversations through a chosen PACE API
-- Choose **Hosted API** (`https://pace-phase2-api.onrender.com`) or **Local API** (`http://127.0.0.1:8000`) in Preferences
-- Theme preference and anonymous per-endpoint conversation session
+Starting with **v0.2.0**, the Windows NSIS installer contains:
 
-The client **does not embed Python, model weights, Ollama or a Docker sandbox**.
-Hosted mode needs Internet and the hosted service's free GPU quota. Local mode
-requires the user to install and run the backend and an inference provider; it
-can work without Internet once local dependencies and model weights are available.
-Changing endpoints stores a separate conversation-session token per endpoint.
+- The Tauri v2 native desktop shell and complete React UI
+- A **frozen Python FastAPI backend** bundled as `pace-api.exe`
+- Local SQLite conversation storage in Windows Local AppData
+- Local PDF parsing and document-workspace endpoints
+- A per-startup capability header and a randomly selected loopback port
 
-## Build on Windows
+The desktop client starts the backend automatically on launch and stops it on
+exit. No separate Python installation is necessary for its bundled features.
+It supports offline PDF processing and conversation storage.
 
-Install Node.js 22, Rust stable, Visual Studio C++ Build Tools and WebView2.
-From the repository root:
+**AI requires a model:** Local inference uses Ollama on the same PC. Install
+Ollama and run `ollama pull qwen2.5-coder:1.5b` before using Local AI.
+The desktop installer deliberately does **not** contain model weights.
+Hosted inference remains available as a separate preference.
 
-```powershell
-cd frontend
-npm ci
-npx --yes @tauri-apps/cli@2.12.1 icon src-tauri/icons/icon-source.svg
-npx --yes @tauri-apps/cli@2.12.1 dev
-npx --yes @tauri-apps/cli@2.12.1 build --bundles nsis
-```
+**Local code execution is disabled.** Running user-supplied Python requires
+a properly secured Docker sandbox and is not offered in the packaged app.
 
-Output: `frontend/src-tauri/target/release/bundle/nsis/*-setup.exe`.
-A Windows executable cannot be built by simply renaming the web build.
-Windows SmartScreen might warn about an unsigned community-built installer.
+## Developer documentation
 
-## Run a local backend
+- [Full local backend configuration and build instructions](README_LOCAL.md)
+- `desktop/backend_entry.py` is the explicit bundled backend entrypoint
+- `desktop/smoke_backend.py` exercises the real frozen backend on Windows
+- `frontend/src-tauri/` owns startup, process shutdown and installer settings
+- `frontend/src/` contains the editable React frontend
 
-From the repository root in a second terminal, create a virtual environment,
-install `backend/requirements.txt`, copy `.env.example` to `.env`, and set:
-
-```env
-ENVIRONMENT=development
-DATABASE_URL=sqlite:///./backend/pace.db
-CORS_ORIGINS=http://tauri.localhost,https://tauri.localhost,http://localhost:5173
-AI_PROVIDER=ollama
-OLLAMA_BASE_URL=http://127.0.0.1:11434
-OLLAMA_MODEL=qwen2.5-coder:1.5b
-SANDBOX_ENABLED=false
-```
-
-Start Ollama locally and pull the matching model, then run:
-`uvicorn backend.main:app --host 127.0.0.1 --port 8000`.
-In desktop **Preferences**, select **Local** and save the API endpoint
-`http://127.0.0.1:8000`. This is a user-operated service, not one
-automatically installed with the desktop app.
+The release includes complete source ZIPs. Installed app binaries are not
+automatically editable source files; download the source archive to customize
+and rebuild PACE.
 
 ## GitHub release workflow
 
