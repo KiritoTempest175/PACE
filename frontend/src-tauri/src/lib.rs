@@ -67,7 +67,23 @@ pub fn run() {
                     let state = window.state::<BackendState>();
                     if let Ok(mut guard) = state.process.lock() {
                         if let Some(child) = guard.take() {
-                            let _ = child.kill();
+                            // PyInstaller onefile uses an extraction parent.
+                            // Kill the full Windows process tree so no local
+                            // server survives app shutdown or holds SQLite open.
+                            #[cfg(target_os = "windows")]
+                            {
+                                let pid = child.pid().to_string();
+                                let status = std::process::Command::new("taskkill")
+                                    .args(["/F", "/T", "/PID", &pid])
+                                    .status();
+                                if status.is_err() {
+                                    let _ = child.kill();
+                                }
+                            }
+                            #[cfg(not(target_os = "windows"))]
+                            {
+                                let _ = child.kill();
+                            }
                         }
                     }
                 }
