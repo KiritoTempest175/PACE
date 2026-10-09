@@ -23,8 +23,9 @@ those permissions.
    and add repository secret **`HF_TOKEN`**. Do not paste your token into chat,
    code, issues or GitHub variables.
 3. Open https://github.com/KiritoTempest175/PACE/actions/workflows/deploy-hf-space.yml
-   (the workflow is on the Phase 2 branch; select that branch in the workflow
-   selector) and click **Run workflow**.
+   (the manual workflow was registered on `main` for GitHub's Actions UI).
+   Click **Run workflow**, and explicitly select **`phase2/production-hardening-20261009`**
+   as the run branch, so that the new `ai-service/` and `scripts/` files are checked out.
 4. Watch the workflow and then visit
    https://huggingface.co/spaces/Kiritox07/pace-phase2-ai
    to check the Space build and use the **Use via API** tab to test `/generate`.
