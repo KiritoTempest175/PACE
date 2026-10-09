@@ -1,7 +1,7 @@
-import {IS_PACE_DESKTOP, getApiBase} from './desktopApi.js';
+import {IS_PACE_DESKTOP, getApiBase, desktopSessionScope, desktopApiHeaders} from './desktopApi.js';
 const SESSION_KEY='pace.session.v2';
 export function sessionToken(){
-  const key=IS_PACE_DESKTOP?SESSION_KEY+'.'+getApiBase():SESSION_KEY;
+  const key=IS_PACE_DESKTOP?SESSION_KEY+'.'+desktopSessionScope():SESSION_KEY;
   let token=localStorage.getItem(key);
   if(!token || !/^[a-f0-9]{64}$/.test(token)){
     const bytes=new Uint8Array(32);
@@ -13,7 +13,7 @@ export function sessionToken(){
 }
 export class ApiError extends Error{constructor(status,message){super(message);this.status=status;}}
 export async function api(path,{method='GET',body,signal,headers={}}={}){
-  const options={method,signal,headers:{'X-PACE-Session':sessionToken(),...headers}};
+  const options={method,signal,headers:{'X-PACE-Session':sessionToken(),...desktopApiHeaders(),...headers}};
   if(body instanceof FormData)options.body=body;
   else if(body!==undefined){options.headers['Content-Type']='application/json';options.body=JSON.stringify(body);}
   const response=await fetch(`${getApiBase()}${path}`,options);
@@ -24,7 +24,7 @@ export async function json(path,options){return (await api(path,options)).json()
 export async function wakeServer(onStatus){
   let delay=1200;
   for(let i=0;i<6;i++){
-    try{const res=await fetch(`${getApiBase()}/health`,{signal:AbortSignal.timeout(20000)});if(res.ok)return res.json();}
+    try{const res=await fetch(`${getApiBase()}/health`,{headers:desktopApiHeaders(),signal:AbortSignal.timeout(20000)});if(res.ok)return res.json();}
     catch{onStatus?.('waking');}
     if(i<5){await new Promise(resolve=>setTimeout(resolve,delay));delay=Math.min(delay*2,8000);}
   }
