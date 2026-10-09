@@ -17,3 +17,6 @@ uploads/
 *.log
 .pytest_cache/
 .coverage
+
+# Build-fetched, pinned Python WebAssembly distribution
+frontend/public/pyodide/
