@@ -1,0 +1,18 @@
+[package]
+name = "pace-desktop"
+version = "0.1.0"
+description = "PACE AI Workspaces desktop client"
+authors = ["PACE contributors"]
+license = "MIT"
+edition = "2021"
+rust-version = "1.81"
+
+[lib]
+name = "pace_desktop_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "=2.7.0", features = [] }
+
+[dependencies]
+tauri = { version = "=2.12.1", features = [] }
