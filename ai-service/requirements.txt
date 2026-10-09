@@ -1,5 +1,5 @@
-gradio>=5.20,<6
-spaces>=0.35
+# ZeroGPU base image provides compatible Gradio 6, Spaces and PyTorch.
+# DO NOT override those versions here: the Space builder pins them.
+# Model runtime libraries only.
 transformers>=4.49,<5
-torch>=2.8,<3
 accelerate>=1.4,<2
