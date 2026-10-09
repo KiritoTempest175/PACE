@@ -55,3 +55,4 @@ jobs:
             'assets/frontend/src-tauri/target/release/bundle/nsis/PACE AI Workspaces_0.2.0_x64-setup.exe' \
             assets/PACE_Web_Source.zip assets/PACE_Desktop_Source.zip assets/PACE_Complete_Source.zip --clobber
           gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json url,isDraft,isPrerelease,assets
+          gh release edit desktop-v0.1.0 --repo "$GITHUB_REPOSITORY" --notes 'DEPRECATED: This v0.1.0 installer contained only the React/Tauri frontend, with no bundled Python backend. Do not use it for local installation. Use desktop-v0.2.0 instead.'
