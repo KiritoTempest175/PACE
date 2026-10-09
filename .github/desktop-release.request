@@ -1,1 +1,1 @@
-Build validated windowless sidecar and Windows NSIS after Rust E0597 borrow lifetime fix. 2026-10-09.
+Build PACE Desktop v0.3 with guided Ollama installer, actor/reviewer selection and direct model downloads, frozen FastAPI, NSIS installer and complete source archives. 2026-10-09.
