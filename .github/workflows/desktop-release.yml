@@ -56,7 +56,7 @@ jobs:
       - name: Freeze local PACE FastAPI backend
         shell: pwsh
         run: |
-          python -m PyInstaller --noconfirm --clean --onefile --noconsole --name pace-api --paths . --collect-all pymupdf --collect-submodules sqlalchemy.dialects --hidden-import fitz --hidden-import masteries.services.ollama_provider --hidden-import masteries.services.telemetry desktop/backend_entry.py
+          python -m PyInstaller --noconfirm --clean --onefile --noconsole --name pace-api --paths . --collect-all pymupdf --collect-submodules sqlalchemy.dialects --hidden-import fitz --hidden-import desktop.model_manager --hidden-import masteries.services.ollama_provider --hidden-import masteries.services.telemetry desktop/backend_entry.py
           if ($LASTEXITCODE -ne 0) { throw 'PyInstaller build failed.' }
           New-Item -ItemType Directory -Force frontend/src-tauri/binaries | Out-Null
           Copy-Item dist/pace-api.exe frontend/src-tauri/binaries/pace-api-x86_64-pc-windows-msvc.exe
@@ -100,16 +100,17 @@ jobs:
             PACE_Complete_Source.zip
           retention-days: 30
           if-no-files-found: error
-      - name: Create draft GitHub Release with installer and source
+      - name: Create draft GitHub Release with installer and source (best effort)
+        continue-on-error: true
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $tag = 'desktop-v0.2.0'
+          $tag = 'desktop-v0.3.0'
           $repo = $env:GITHUB_REPOSITORY
           gh release view $tag --repo $repo 2>$null
           if ($LASTEXITCODE -ne 0) {
-            gh release create $tag --repo $repo --target $env:GITHUB_SHA --draft --title 'PACE Desktop 0.2.0 (Windows, bundled local API)' --notes 'PACE Desktop 0.2 includes an automatically launched local FastAPI+SQLite+PDF backend. Offline AI still needs Ollama and the qwen2.5-coder:1.5b model installed separately. Unsigned prerelease; review before publishing.'
+            gh release create $tag --repo $repo --target $env:GITHUB_SHA --draft --title 'PACE Desktop 0.3.0 (Windows, Ollama setup and model manager)' --notes 'PACE Desktop 0.3 includes a local FastAPI backend, in-app Ollama installation and 1B-8B model downloads. Pro mode allows separate Generator and Reviewer models; model weights download with user consent. Unsigned prerelease.'
             if ($LASTEXITCODE -ne 0) { throw 'Unable to create GitHub draft release.' }
           }
           $installer = @(Get-ChildItem 'frontend/src-tauri/target/release/bundle/nsis' -Filter '*.exe' | Select-Object -First 1)
