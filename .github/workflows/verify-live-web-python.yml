@@ -1,0 +1,24 @@
+name: Verify live Netlify Python runner
+on:
+  push:
+    branches: [main]
+    paths: [.github/live-web-python.request]
+permissions:
+  contents: read
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install headless Chromium
+        run: |
+          pip install 'playwright==1.55.0'
+          python -m playwright install --with-deps chromium
+      - name: Verify deployed site executes Python and handles timeout
+        env:
+          PACE_WEB_URL: https://pace-ensemble.netlify.app
+        run: python frontend/scripts/smoke_python_runner.py
