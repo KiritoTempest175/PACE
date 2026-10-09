@@ -1,6 +1,7 @@
 name: Publish verified PACE Desktop 0.2
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - main
@@ -33,14 +34,24 @@ jobs:
           test -f 'assets/frontend/src-tauri/target/release/bundle/nsis/PACE AI Workspaces_0.2.0_x64-setup.exe'
           bytes=$(stat -c %s 'assets/frontend/src-tauri/target/release/bundle/nsis/PACE AI Workspaces_0.2.0_x64-setup.exe')
           test "$bytes" -gt 10000000
+      - name: Require GitHub release-authorized token
+        env:
+          PACE_RELEASE_TOKEN: ${{ secrets.PACE_RELEASE_TOKEN }}
+        run: |
+          if [ -z "$PACE_RELEASE_TOKEN" ]; then
+            echo '::error::Add the GitHub repository secret PACE_RELEASE_TOKEN (fine-grained GitHub PAT with Contents: Read and write).'
+            exit 1
+          fi
       - name: Create public desktop prerelease
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.PACE_RELEASE_TOKEN }}
         run: |
           set -euo pipefail
           tag=desktop-v0.2.0
-          gh release create "$tag" --repo "$GITHUB_REPOSITORY" --target a38cc25d501395afb1915b4dd0caf9ed76089886 --prerelease --title 'PACE Desktop 0.2.0 (Windows + bundled API)' --notes 'Replaces deprecated frontend-only v0.1.0. Includes local FastAPI, SQLite and PDF processing; a separate Ollama installation and model download are required for offline AI. Unsigned Windows installer; GUI acceptance testing remains outstanding.'
+          if ! gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$tag" --repo "$GITHUB_REPOSITORY" --target a38cc25d501395afb1915b4dd0caf9ed76089886 --prerelease --title 'PACE Desktop 0.2.0 (Windows + bundled API)' --notes 'Replaces deprecated frontend-only v0.1.0. Bundled FastAPI, SQLite and PDF extraction. Offline AI requires separate Ollama and model installation. Unsigned community installer; GUI acceptance testing recommended.'
+          fi
           gh release upload "$tag" --repo "$GITHUB_REPOSITORY" \
             'assets/frontend/src-tauri/target/release/bundle/nsis/PACE AI Workspaces_0.2.0_x64-setup.exe' \
-            assets/PACE_Web_Source.zip assets/PACE_Desktop_Source.zip assets/PACE_Complete_Source.zip
+            assets/PACE_Web_Source.zip assets/PACE_Desktop_Source.zip assets/PACE_Complete_Source.zip --clobber
           gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json url,isDraft,isPrerelease,assets
