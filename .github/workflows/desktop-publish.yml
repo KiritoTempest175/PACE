@@ -1,10 +1,8 @@
-name: Publish verified PACE Desktop prerelease
+name: Publish tested PACE Desktop v0.4
 on:
   push:
-    branches:
-      - feature/tauri-desktop
-    paths:
-      - .github/desktop-publish.request
+    branches: [feature/tauri-desktop]
+    paths: [.github/desktop-publish.request]
 permissions:
   contents: write
 jobs:
@@ -12,26 +10,23 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Verify Windows v0.3 installer and all three source archives exist
+      - name: Verify exact installer and all source/built-web assets
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          tag='desktop-v0.3.0'
-          gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json assets,isDraft,tagName > /tmp/pace-release.json
-          jq -e '.isDraft == true' /tmp/pace-release.json > /dev/null
-          jq -e '[.assets[].name] | any(. == "PACE_Web_Source.zip")' /tmp/pace-release.json > /dev/null
-          jq -e '[.assets[].name] | any(. == "PACE_Desktop_Source.zip")' /tmp/pace-release.json > /dev/null
-          jq -e '[.assets[].name] | any(. == "PACE_Complete_Source.zip")' /tmp/pace-release.json > /dev/null
-          jq -e '[.assets[].name] | any(endswith("-setup.exe"))' /tmp/pace-release.json > /dev/null
-          jq -r '.assets[] | [.name, (.size|tostring)] | @tsv' /tmp/pace-release.json
-      - name: Publish as a public prerelease
+          gh release view desktop-v0.4.0 --repo "$GITHUB_REPOSITORY" --json assets,isDraft,tagName > /tmp/release.json
+          jq -e '.isDraft == true' /tmp/release.json
+          for asset in PACE_Web_Source.zip PACE_Web_Deploy_Bundle.zip PACE_Desktop_Source.zip PACE_Complete_Source.zip; do
+            jq -e --arg asset "$asset" '[.assets[].name] | index($asset) != null' /tmp/release.json
+          done
+          jq -e '[.assets[].name] | any(contains("0.4.0_x64-setup.exe"))' /tmp/release.json
+          jq -r '.assets[] | [.name, (.size|tostring)] | @tsv' /tmp/release.json
+      - name: Publish Windows v0.4 as public prerelease
         env:
           GH_TOKEN: ${{ github.token }}
+        shell: bash
         run: |
-          gh release edit desktop-v0.3.0 --repo "$GITHUB_REPOSITORY" --draft=false --prerelease
-          gh release view desktop-v0.3.0 --repo "$GITHUB_REPOSITORY" --json isDraft,isPrerelease,url,assets
-          gh release edit desktop-v0.2.0 --repo "$GITHUB_REPOSITORY" --notes 'Superseded by desktop-v0.3.0. v0.3 adds a guided Ollama installer, selectable local 1B–8B models and distinct Generator/Reviewer roles. Download https://github.com/KiritoTempest175/PACE/releases/tag/desktop-v0.3.0'
-
-          gh release edit desktop-v0.1.0 --repo "$GITHUB_REPOSITORY" --notes 'DEPRECATED: The v0.1.0 installer contains only the frontend and does not run a local backend. Download v0.2.0 instead: https://github.com/KiritoTempest175/PACE/releases/tag/desktop-v0.3.0'
+          gh release edit desktop-v0.4.0 --repo "$GITHUB_REPOSITORY" --draft=false --prerelease
+          gh release view desktop-v0.4.0 --repo "$GITHUB_REPOSITORY" --json isDraft,isPrerelease,url,assets
