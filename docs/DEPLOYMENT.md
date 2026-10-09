@@ -52,7 +52,7 @@ Render Free may spin down after 15 minutes idle and stores no persistent local f
 ## 4. Netlify frontend
 
 1. Configure GitHub continuous deployment of the same repository (or replace the existing site's source branch with the patched source).
-2. Use the root `netlify.toml`; it selects base directory `frontend`, `npm install --no-audit --no-fund`, publish directory `dist`, SPA rewrite and security headers.
+2. Use the root `netlify.toml`; it selects base directory `frontend`, `npm ci --no-audit --no-fund`, publish directory `dist`, SPA rewrite and security headers.
 3. Set `VITE_API_BASE_URL=https://YOUR-SERVICE.onrender.com` using the actual Render URL. Include the scheme; omit the trailing slash and `/api` path.
 4. Redeploy `pace-ensemble.netlify.app`. Verify that requests originate from the expected domain and include `X-PACE-Session`.
 5. Ensure the Render `CORS_ORIGINS` exactly matches the browser origin. Preview deploys use other origins and will be rejected until added deliberately.
