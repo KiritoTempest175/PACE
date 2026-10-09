@@ -1,6 +1,6 @@
 [package]
 name = "pace-desktop"
-version = "0.1.0"
+version = "0.2.0"
 description = "PACE AI Workspaces desktop client"
 authors = ["PACE contributors"]
 license = "MIT"
@@ -16,3 +16,6 @@ tauri-build = { version = "=2.7.1", features = [] }
 
 [dependencies]
 tauri = { version = "=2.12.1", features = [] }
+tauri-plugin-shell = "2"
+serde = { version = "1", features = ["derive"] }
+uuid = { version = "1", features = ["v4"] }
