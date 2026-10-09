@@ -85,7 +85,7 @@ pub fn run() {
                                 let _ = child.kill();
                             }
                         }
-                    }
+                    };
                 }
             }
         })
