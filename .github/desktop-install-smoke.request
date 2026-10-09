@@ -1,1 +1,1 @@
-Verify NSIS installs PACE native GUI and bundled pace-api.exe locally. 2026-10-09.
+Strict GUI executable identity and actual Tauri process + bundled PACE API sidecar launch check. 2026-10-09.
