@@ -1,0 +1,91 @@
+name: Package PACE Desktop for Windows
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - feature/tauri-desktop
+    paths:
+      - .github/desktop-release.request
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pace-desktop-release
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Tauri 2 Windows NSIS and source release
+    runs-on: windows-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Setup stable Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Cache Rust packages
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: frontend/src-tauri -> target
+      - name: Install locked frontend dependencies
+        working-directory: frontend
+        run: npm ci --no-audit --no-fund
+      - name: Run frontend lint and unit tests
+        working-directory: frontend
+        run: |
+          npm run lint
+          npm test
+      - name: Generate native icons from the included SVG
+        working-directory: frontend
+        run: npx --yes @tauri-apps/cli@2.12.1 icon src-tauri/icons/icon-source.svg
+      - name: Validate Rust crate metadata
+        working-directory: frontend/src-tauri
+        run: cargo metadata --format-version 1 --no-deps
+      - name: Build Tauri NSIS installer
+        working-directory: frontend
+        run: npx --yes @tauri-apps/cli@2.12.1 build --bundles nsis
+      - name: Verify installer exists
+        shell: pwsh
+        run: |
+          $bundles = @(Get-ChildItem 'frontend/src-tauri/target/release/bundle/nsis' -Filter '*.exe')
+          if ($bundles.Count -eq 0) { throw 'No Windows NSIS setup executable was produced.' }
+          $bundles | ForEach-Object { Write-Host ('Installer: ' + $_.Name + ' (' + $_.Length + ' bytes)') }
+      - name: Archive frontend and desktop source from tracked files
+        shell: pwsh
+        run: |
+          git archive --format=zip --output=PACE_Web_Source.zip HEAD frontend/src frontend/public frontend/index.html frontend/package.json frontend/package-lock.json frontend/vite.config.js backend core masteries ai-service docs LICENSE README.md netlify.toml render.yaml
+          if ($LASTEXITCODE -ne 0) { throw 'Could not generate web source archive.' }
+          git archive --format=zip --output=PACE_Desktop_Source.zip HEAD frontend desktop LICENSE README.md backend core masteries ai-service
+          if ($LASTEXITCODE -ne 0) { throw 'Could not generate desktop source archive.' }
+      - name: Upload installer and sources to Actions artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: PACE-Desktop-Windows-and-Source
+          path: |
+            frontend/src-tauri/target/release/bundle/nsis/*.exe
+            PACE_Web_Source.zip
+            PACE_Desktop_Source.zip
+          retention-days: 30
+          if-no-files-found: error
+      - name: Create draft GitHub Release with installer and source
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = 'desktop-v0.1.0'
+          $repo = $env:GITHUB_REPOSITORY
+          gh release view $tag --repo $repo 2>$null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create $tag --repo $repo --target $env:GITHUB_SHA --draft --title 'PACE Desktop 0.1.0 (Windows)' --notes 'Tauri v2 Windows client. Hosted AI needs internet; offline usage requires your own PACE backend and local model. Unsigned community installer; review before publishing.'
+            if ($LASTEXITCODE -ne 0) { throw 'Unable to create GitHub draft release.' }
+          }
+          $installer = @(Get-ChildItem 'frontend/src-tauri/target/release/bundle/nsis' -Filter '*.exe' | Select-Object -First 1)
+          gh release upload $tag --repo $repo $installer.FullName PACE_Web_Source.zip PACE_Desktop_Source.zip --clobber
+          if ($LASTEXITCODE -ne 0) { throw 'Unable to upload release assets.' }
