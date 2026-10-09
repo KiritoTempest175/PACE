@@ -1,5 +1,5 @@
-# ZeroGPU base image provides compatible Gradio 6, Spaces and PyTorch.
-# DO NOT override those versions here: the Space builder pins them.
-# Model runtime libraries only.
-transformers>=4.49,<5
+# Gradio 6 on ZeroGPU requires huggingface-hub >= 1.16.
+# Transformers 4 requires huggingface-hub < 1: incompatible.
+# Transformers 5 supports the modern HF Hub API. Base image pins Gradio/Spaces/Torch.
+transformers>=5.0,<6
 accelerate>=1.4,<2
