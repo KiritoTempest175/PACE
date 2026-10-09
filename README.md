@@ -107,6 +107,19 @@ cd frontend && npm install && npm run lint && npm test && npm run build
 
 **Reproducible frontend builds:** The regenerated `frontend/package-lock.json` was captured from GitHub Actions and committed. GitHub Actions runs `npm ci`, frontend lint, component tests and Vite production build. Deployment preview, browser accessibility and live AI integration remain unverified.
 
+## Downloads and desktop client
+
+PACE is open-source under the [MIT License](LICENSE).
+
+- **[PACE Desktop v0.1.0 for Windows (installer .exe)](https://github.com/KiritoTempest175/PACE/releases/download/desktop-v0.1.0/PACE.AI.Workspaces_0.1.0_x64-setup.exe)** — initial unsigned Tauri v2 prerelease for Windows x64
+- **[Desktop client source ZIP](https://github.com/KiritoTempest175/PACE/releases/download/desktop-v0.1.0/PACE_Desktop_Source.zip)** — React/Tauri, Python API, docs and source needed to customize it
+- **[Web application source ZIP](https://github.com/KiritoTempest175/PACE/releases/download/desktop-v0.1.0/PACE_Web_Source.zip)** — React/Vite, FastAPI and supporting source
+- **[Release details and all downloads](https://github.com/KiritoTempest175/PACE/releases/tag/desktop-v0.1.0)**
+
+The production website source stays on **`main`**. Desktop development lives on the separate **[`feature/tauri-desktop` branch](https://github.com/KiritoTempest175/PACE/tree/feature/tauri-desktop)**.
+
+The desktop app can connect to the hosted PACE API or a PACE backend running locally. It **does not bundle Python, Ollama, or model weights**; offline AI requires the user to install/run the local backend and an appropriate local model. See [desktop setup instructions on the desktop branch](https://github.com/KiritoTempest175/PACE/blob/feature/tauri-desktop/desktop/README.md). The Windows installer is unsigned and compiled on GitHub Actions; desktop GUI testing is still pending.
+
 ## Deployment
 
 Refer to [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for platform-specific settings, env tables and verification. The architecture is designed to fit zero-recurring-hosting-cost **quotas**, not zero operational limits. ZeroGPU eligibility and daily quotas can change. Render Free spins down and has ephemeral local storage. PostgreSQL persistence must be configured separately.
@@ -123,4 +136,4 @@ These are placeholders, not screenshots of a verified deployed application.
 
 ## Security and scope disclosure
 
-The 22 backend contract tests exercise selected security and persistence boundaries without external GPU/network calls. They do not establish universal correctness, formal container isolation, accessibility compliance, dependency safety, or actual GPU performance. No external deployment was performed by this delivery. For a list of remaining issues, consult [docs/AUDIT_MATRIX.md](docs/AUDIT_MATRIX.md).
+The 22 backend contract tests exercise selected security and persistence boundaries without external GPU/network calls. They do not establish universal correctness, formal container isolation, accessibility compliance, dependency safety, or actual GPU performance. Netlify, Render, Neon and Hugging Face staging integrations have passed a live inference and persistence smoke test, but browser accessibility, offline models, and Windows GUI flows have not been exhaustively tested. For a list of remaining issues, consult [docs/AUDIT_MATRIX.md](docs/AUDIT_MATRIX.md).
