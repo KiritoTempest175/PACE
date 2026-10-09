@@ -1,6 +1,9 @@
 """Read-only public health/inference probe for PACE Hugging Face Space."""
 from __future__ import annotations
 import json
+import os
+import re
+from collections import deque
 import sys
 import time
 import urllib.request
@@ -50,5 +53,15 @@ if __name__ == "__main__":
             time.sleep(12)
     elif sys.argv[1:] == ["--inference"]:
         test_inference()
+    elif sys.argv[1:] == ["--build-logs"]:
+        from huggingface_hub import HfApi
+        token = os.environ.get("HF_TOKEN", "")
+        if not token:
+            raise SystemExit("HF_TOKEN environment secret unavailable")
+        api = HfApi(token=token)
+        lines = deque(api.fetch_space_logs(repo_id=SPACE_ID, build=True), maxlen=100)
+        for line in lines:
+            safe = re.sub(r"hf_[A-Za-z0-9]{12,}", "[REDACTED_TOKEN]", str(line))
+            print(safe, end="" if safe.endswith("\\n") else "\\n")
     else:
         raise SystemExit("Usage: --runtime | --inference")
