@@ -12,13 +12,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Verify installer and both open-source archives exist
+      - name: Verify Windows v0.3 installer and all three source archives exist
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          tag='desktop-v0.2.0'
+          tag='desktop-v0.3.0'
           gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json assets,isDraft,tagName > /tmp/pace-release.json
           jq -e '.isDraft == true' /tmp/pace-release.json > /dev/null
           jq -e '[.assets[].name] | any(. == "PACE_Web_Source.zip")' /tmp/pace-release.json > /dev/null
@@ -30,6 +30,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release edit desktop-v0.2.0 --repo "$GITHUB_REPOSITORY" --draft=false --prerelease
-          gh release view desktop-v0.2.0 --repo "$GITHUB_REPOSITORY" --json isDraft,isPrerelease,url,assets
-          gh release edit desktop-v0.1.0 --repo "$GITHUB_REPOSITORY" --notes 'DEPRECATED: The v0.1.0 installer contains only the frontend and does not run a local backend. Download v0.2.0 instead: https://github.com/KiritoTempest175/PACE/releases/tag/desktop-v0.2.0'
+          gh release edit desktop-v0.3.0 --repo "$GITHUB_REPOSITORY" --draft=false --prerelease
+          gh release view desktop-v0.3.0 --repo "$GITHUB_REPOSITORY" --json isDraft,isPrerelease,url,assets
+          gh release edit desktop-v0.2.0 --repo "$GITHUB_REPOSITORY" --notes 'Superseded by desktop-v0.3.0. v0.3 adds a guided Ollama installer, selectable local 1B–8B models and distinct Generator/Reviewer roles. Download https://github.com/KiritoTempest175/PACE/releases/tag/desktop-v0.3.0'
+
+          gh release edit desktop-v0.1.0 --repo "$GITHUB_REPOSITORY" --notes 'DEPRECATED: The v0.1.0 installer contains only the frontend and does not run a local backend. Download v0.2.0 instead: https://github.com/KiritoTempest175/PACE/releases/tag/desktop-v0.3.0'
