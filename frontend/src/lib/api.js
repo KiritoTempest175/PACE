@@ -1,12 +1,13 @@
-const BASE=(import.meta.env.VITE_API_BASE_URL || '/api').replace(/\/$/,'');
+import {IS_PACE_DESKTOP, getApiBase} from './desktopApi.js';
 const SESSION_KEY='pace.session.v2';
 export function sessionToken(){
-  let token=localStorage.getItem(SESSION_KEY);
+  const key=IS_PACE_DESKTOP?SESSION_KEY+'.'+getApiBase():SESSION_KEY;
+  let token=localStorage.getItem(key);
   if(!token || !/^[a-f0-9]{64}$/.test(token)){
     const bytes=new Uint8Array(32);
     crypto.getRandomValues(bytes);
     token=Array.from(bytes,x=>x.toString(16).padStart(2,'0')).join('');
-    localStorage.setItem(SESSION_KEY,token);
+    localStorage.setItem(key,token);
   }
   return token;
 }
@@ -15,7 +16,7 @@ export async function api(path,{method='GET',body,signal,headers={}}={}){
   const options={method,signal,headers:{'X-PACE-Session':sessionToken(),...headers}};
   if(body instanceof FormData)options.body=body;
   else if(body!==undefined){options.headers['Content-Type']='application/json';options.body=JSON.stringify(body);}
-  const response=await fetch(`${BASE}${path}`,options);
+  const response=await fetch(`${getApiBase()}${path}`,options);
   if(!response.ok){let message='Request failed';try{const data=await response.json();message=typeof data.detail==='string'?data.detail:message;}catch{}throw new ApiError(response.status,message);}
   return response;
 }
@@ -23,7 +24,7 @@ export async function json(path,options){return (await api(path,options)).json()
 export async function wakeServer(onStatus){
   let delay=1200;
   for(let i=0;i<6;i++){
-    try{const res=await fetch(`${BASE}/health`,{signal:AbortSignal.timeout(20000)});if(res.ok)return res.json();}
+    try{const res=await fetch(`${getApiBase()}/health`,{signal:AbortSignal.timeout(20000)});if(res.ok)return res.json();}
     catch{onStatus?.('waking');}
     if(i<5){await new Promise(resolve=>setTimeout(resolve,delay));delay=Math.min(delay*2,8000);}
   }
