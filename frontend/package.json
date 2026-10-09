@@ -9,7 +9,9 @@
     "preview": "vite preview",
     "lint": "eslint .",
     "test": "vitest run",
-    "format": "prettier --write src"
+    "format": "prettier --write src",
+    "prebuild": "node scripts/vendor-pyodide.mjs",
+    "predev": "node scripts/vendor-pyodide.mjs"
   },
   "dependencies": {
     "lucide-react": "^0.468.0",
