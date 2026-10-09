@@ -37,6 +37,42 @@ jobs:
           $backend = $bins[0]
           if ($backend.Length -lt 5000000) { throw 'Backend binary unexpectedly small.' }
           Write-Host ('VERIFIED installed backend: ' + $backend.FullName + ' (' + $backend.Length + ' bytes)')
-          $apps = @(Get-ChildItem $backend.DirectoryName -File -Filter '*PACE*.exe' -ErrorAction SilentlyContinue)
-          if ($apps.Count -eq 0) { throw 'PACE Tauri desktop executable missing from installer directory.' }
-          Write-Host ('VERIFIED installed Tauri GUI: ' + $apps[0].FullName)
+          $apps = @(Get-ChildItem $backend.DirectoryName -File -Filter '*.exe' -ErrorAction Stop | Where-Object { $_.Name -ne 'pace-api.exe' -and $_.Name -match 'PACE' })
+          if ($apps.Count -ne 1) { throw ('Expected exactly one distinct Tauri application executable, found ' + $apps.Count) }
+          $appExe = $apps[0]
+          if ($appExe.Length -lt 500000) { throw 'Tauri desktop executable is unexpectedly small.' }
+          Write-Host ('VERIFIED installed Tauri GUI: ' + $appExe.FullName + ' (' + $appExe.Length + ' bytes)')
+      - name: Launch installed Tauri application and check its local backend
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $installDir = Join-Path $env:LOCALAPPDATA 'PACE AI Workspaces'
+          $appExe = @(Get-ChildItem $installDir -File -Filter '*.exe' | Where-Object { $_.Name -ne 'pace-api.exe' -and $_.Name -match 'PACE' } | Select-Object -First 1)
+          if ($appExe.Count -ne 1) { throw 'Tauri GUI executable missing.' }
+          $proc = Start-Process -FilePath $appExe[0].FullName -PassThru
+          try {
+            $ready = $false
+            for ($i = 0; $i -lt 20; $i++) {
+              Start-Sleep -Seconds 2
+              $proc.Refresh()
+              if ($proc.HasExited) { throw ('Tauri GUI exited early: ' + $proc.ExitCode) }
+              $children = @(Get-CimInstance Win32_Process -Filter "Name='pace-api.exe'" -ErrorAction SilentlyContinue)
+              if ($children.Count -gt 0) {
+                Write-Host ('VERIFIED app auto-started local PACE API process(es): ' + $children.Count)
+                $ready = $true
+                break
+              }
+            }
+            if (-not $ready) { throw 'GUI ran but did not start bundled FastAPI sidecar.' }
+            $logs = @(Get-ChildItem $env:LOCALAPPDATA -Recurse -File -Filter 'pace-backend.log' -ErrorAction SilentlyContinue)
+            foreach ($log in $logs) {
+              Write-Host ('Local PACE backend diagnostic path: ' + $log.FullName)
+            }
+          } finally {
+            if (-not $proc.HasExited) {
+              $null = $proc.CloseMainWindow()
+              Start-Sleep -Seconds 3
+              $proc.Refresh()
+              if (-not $proc.HasExited) { Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue }
+            }
+          }
