@@ -5,28 +5,73 @@ on:
     paths: [.github/desktop-publish.request]
 permissions:
   contents: write
+  actions: read
 jobs:
-  publish:
+  release:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 12
     steps:
-      - name: Verify exact installer and all source/built-web assets
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Download exact tested Windows build
+        uses: actions/download-artifact@v4
+        with:
+          name: PACE-Desktop-Windows-and-Source
+          run-id: 37972608175
+          repository: KiritoTempest175/PACE
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: files
+      - name: Verify Windows installer, web runtime and source assets
         shell: bash
         run: |
           set -euo pipefail
-          gh release view desktop-v0.4.0 --repo "$GITHUB_REPOSITORY" --json assets,isDraft,tagName > /tmp/release.json
-          jq -e '.isDraft == true' /tmp/release.json
-          for asset in PACE_Web_Source.zip PACE_Web_Deploy_Bundle.zip PACE_Desktop_Source.zip PACE_Complete_Source.zip; do
-            jq -e --arg asset "$asset" '[.assets[].name] | index($asset) != null' /tmp/release.json
+          test -s 'files/frontend/src-tauri/target/release/bundle/nsis/PACE AI Workspaces_0.4.0_x64-setup.exe'
+          for name in PACE_Web_Source.zip PACE_Web_Deploy_Bundle.zip PACE_Desktop_Source.zip PACE_Complete_Source.zip; do
+            test -s "files/$name"
           done
-          jq -e '[.assets[].name] | any(contains("0.4.0_x64-setup.exe"))' /tmp/release.json
-          jq -r '.assets[] | [.name, (.size|tostring)] | @tsv' /tmp/release.json
-      - name: Publish Windows v0.4 as public prerelease
+          python - <<'PY'
+          import zipfile
+          p='files/PACE_Web_Deploy_Bundle.zip'
+          with zipfile.ZipFile(p) as z:
+              for name in ['index.html','python-runner.worker.js','pyodide/pyodide.asm.wasm','pyodide/python_stdlib.zip']:
+                  assert z.getinfo(name).file_size>1000,name
+          print('Five assets verified, including offline Python runtime')
+          PY
+      - name: Create draft release and upload verified artifacts
+        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          PACE_RELEASE_TOKEN: ${{ secrets.PACE_RELEASE_TOKEN }}
+          SOURCE_SHA: b898aef640f1248750e6f325b24660d28f62735a
+        run: |
+          set -euo pipefail
+          tag='desktop-v0.4.0'
+          if ! gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo 'Creating GitHub Release with GitHub Actions token'
+            if ! gh release create "$tag" --repo "$GITHUB_REPOSITORY" --target "$SOURCE_SHA" --draft --title 'PACE Desktop v0.4.0 — Python Runner' --notes 'Tauri Windows app with bundled FastAPI, Ollama setup, and working offline Python 3 WebAssembly runner in Coding. Includes web deployment ZIP and all source archives. No server-side code execution. Prerelease; do not run untrusted code.'; then
+              if [ -z "$PACE_RELEASE_TOKEN" ]; then echo '::error::GitHub denied release creation and fallback token is missing.'; exit 1; fi
+              echo 'Retrying GitHub Release creation with repository-scoped release token'
+              GH_TOKEN="$PACE_RELEASE_TOKEN" gh release create "$tag" --repo "$GITHUB_REPOSITORY" --target "$SOURCE_SHA" --draft --title 'PACE Desktop v0.4.0 — Python Runner' --notes 'Working Python 3 WebAssembly runner for web and desktop. FastAPI and Ollama setup preserved. Includes deploy-ready site and editable sources.'
+            fi
+          fi
+          assets=(
+            'files/frontend/src-tauri/target/release/bundle/nsis/PACE AI Workspaces_0.4.0_x64-setup.exe'
+            'files/PACE_Web_Deploy_Bundle.zip'
+            'files/PACE_Web_Source.zip'
+            'files/PACE_Desktop_Source.zip'
+            'files/PACE_Complete_Source.zip'
+          )
+          if ! gh release upload "$tag" --repo "$GITHUB_REPOSITORY" "${assets[@]}" --clobber; then
+            if [ -z "$PACE_RELEASE_TOKEN" ]; then exit 1; fi
+            GH_TOKEN="$PACE_RELEASE_TOKEN" gh release upload "$tag" --repo "$GITHUB_REPOSITORY" "${assets[@]}" --clobber
+          fi
+          gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json assets,isDraft,tagName
+      - name: Publish tested installer as public prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PACE_RELEASE_TOKEN: ${{ secrets.PACE_RELEASE_TOKEN }}
         shell: bash
         run: |
-          gh release edit desktop-v0.4.0 --repo "$GITHUB_REPOSITORY" --draft=false --prerelease
+          set -euo pipefail
+          if ! gh release edit desktop-v0.4.0 --repo "$GITHUB_REPOSITORY" --draft=false --prerelease; then
+            GH_TOKEN="$PACE_RELEASE_TOKEN" gh release edit desktop-v0.4.0 --repo "$GITHUB_REPOSITORY" --draft=false --prerelease
+          fi
           gh release view desktop-v0.4.0 --repo "$GITHUB_REPOSITORY" --json isDraft,isPrerelease,url,assets
