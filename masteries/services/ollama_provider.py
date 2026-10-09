@@ -6,6 +6,7 @@ Review mode makes a second pass with the same model and is labeled as such.
 from __future__ import annotations
 
 import json
+import os
 from typing import Iterator
 from urllib.parse import urlsplit
 
@@ -15,7 +16,18 @@ from core.config import get_settings
 from masteries.services.ai_gateway import AIUnavailable
 
 
-def _request(prompt: str, mode: str) -> Iterator[str]:
+def desktop_role_model(role: str) -> str | None:
+    """Return the user's persisted local Generator or Reviewer selection."""
+    if not os.environ.get("PACE_DESKTOP_DATA_DIR"):
+        return None
+    from desktop.model_manager import read_selection
+    model = read_selection().get(role)
+    if not model:
+        raise AIUnavailable(f"Download and select a {role} model in PACE Desktop setup")
+    return model
+
+
+def _request(prompt: str, mode: str, role: str = "actor") -> Iterator[str]:
     settings = get_settings()
     url = urlsplit(settings.ollama_base_url)
     if url.scheme not in ("http", "https") or not url.hostname or url.username or url.password:
@@ -26,7 +38,7 @@ def _request(prompt: str, mode: str) -> Iterator[str]:
         "research": "Give tentative explanations. Do not fabricate citations.",
     }[mode]
     payload = {
-        "model": settings.ollama_model,
+        "model": desktop_role_model(role) or settings.ollama_model,
         "messages": [{"role": "system", "content": system}, {"role": "user", "content": prompt}],
         "stream": True,
         "options": {"num_predict": settings.max_new_tokens},
@@ -60,9 +72,9 @@ def stream_ollama(text: str, mode: str, speed: str) -> Iterator[str]:
         yield from _request(text, mode)
         return
     # The first pass is intentionally buffered: it is not final reviewed output.
-    draft = "".join(_request(text, mode)).strip()
+    draft = "".join(_request(text, mode, "actor")).strip()
     if not draft:
         raise AIUnavailable("Local actor output is empty")
     review = "Review this draft for mistakes and return only the corrected answer. " \
              "State any uncertainty.\n\nQUESTION:\n" + text + "\n\nDRAFT:\n" + draft
-    yield from _request(review, mode)
+    yield from _request(review, mode, "critic")
