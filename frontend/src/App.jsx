@@ -20,7 +20,7 @@ function App(){
  const [telemetryOpen,setTelemetryOpen]=useState(false);
  const [telemetry,setTelemetry]=useState(null);
  const [settingsOpen,setSettingsOpen]=useState(false);
- const [desktopEndpoint,setDesktopEndpoint]=useState(()=>IS_PACE_DESKTOP?getApiBase():'');
+ const [desktopEndpoint,setDesktopEndpoint]=useState(()=>IS_PACE_DESKTOP?'local':'');
  const [sidebarOpen,setSidebarOpen]=useState(false);
  const [notice,setNotice]=useState('');
  const [document,setDocument]=useState(null);
