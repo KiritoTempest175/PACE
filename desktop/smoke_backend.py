@@ -76,6 +76,11 @@ def main():
                 assert resp.status == 200
             assert (Path(directory)/"pace.sqlite3").exists()
             print("PASS: frozen backend startup, scoped auth, SQLite persistence, CRUD and cleanup")
+        except Exception:
+            log_path = Path(directory) / "pace-backend.log"
+            if log_path.exists():
+                print("Backend diagnostic log (last 4000 chars):", log_path.read_text(encoding="utf-8", errors="replace")[-4000:], flush=True)
+            raise
         finally:
             # PyInstaller --onefile spawns an extraction parent + child.
             # On Windows kill the entire tree or the frozen child keeps SQLite
