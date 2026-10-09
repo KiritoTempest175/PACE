@@ -1,0 +1,37 @@
+name: Deploy Hugging Face AI Space
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pace-huggingface-space
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Publish PACE AI service
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Require Hugging Face write token
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        shell: bash
+        run: |
+          if [[ -z "$HF_TOKEN" ]]; then
+            echo "::error::Add HF_TOKEN with Hugging Face repo write permissions in GitHub Actions secrets before dispatch."
+            exit 1
+          fi
+      - name: Install Hub API client
+        run: python -m pip install --disable-pip-version-check 'huggingface_hub>=0.36,<3'
+      - name: Create/update separate ZeroGPU Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          PACE_SPACE_NAME: pace-phase2-ai
+        run: python scripts/deploy_hf_space.py
