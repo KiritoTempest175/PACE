@@ -1,1 +1,1 @@
-Build PACE Desktop 0.2 with bundled sidecar, smoke test, Windows process-tree cleanup, React startup fix and full-source archive. 2026-10-09.
+Verify windowless PyInstaller frozen backend with file-backed Uvicorn stdout/stderr, process tree cleanup, Tauri NSIS v0.2, 2026-10-09.
