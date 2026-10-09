@@ -38,9 +38,16 @@ def test_inference():
 
 if __name__ == "__main__":
     if sys.argv[1:] == ["--runtime"]:
-        stage = read_runtime()
-        if stage != "RUNNING":
-            raise SystemExit(f"Space runtime is {stage}, not RUNNING")
+        for attempt in range(15):
+            stage = read_runtime()
+            if stage == "RUNNING":
+                print("Space reports RUNNING", flush=True)
+                break
+            if stage in {"BUILD_ERROR", "RUNTIME_ERROR", "CONFIG_ERROR"}:
+                raise SystemExit(f"Space runtime failed: {stage}")
+            if attempt == 14:
+                raise SystemExit(f"Space did not reach RUNNING: {stage}")
+            time.sleep(12)
     elif sys.argv[1:] == ["--inference"]:
         test_inference()
     else:
