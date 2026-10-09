@@ -1,6 +1,7 @@
 import {useCallback,useEffect,useMemo,useRef,useState} from 'react';
 import {Activity,ArrowUp,BookOpen,Code2,FileText,FlaskConical,Menu,Plus,Settings,Upload,Trash2,X,WifiOff,LoaderCircle,TerminalSquare,Play} from 'lucide-react';
 import {Badge,Button,Card,Input,Modal,Skeleton,Tabs,Toast,Tooltip} from './components/ui.jsx';
+import {createPythonRun} from './lib/pythonRunner.js';
 import {useTheme} from './ThemeContext.jsx';
 import {json,wakeServer,streamAnswer} from './lib/api.js';
 import {IS_PACE_DESKTOP, getApiBase, initDesktopRuntime, setDesktopApiBase, desktopConnectionKind} from './lib/desktopApi.js';
@@ -38,6 +39,8 @@ function App(){
  const inputRef=useRef(null);
  const scrollRef=useRef(null);
  const fileRef=useRef(null);
+ const pythonRunRef=useRef(null);
+ const [pythonStatus,setPythonStatus]=useState('');
  const abortRef=useRef(null);
  const theme=useTheme();
  const statusLabel=online==='online'?'API online':online==='waking'?'Waking up API':online==='checking'?'Connecting':'API unavailable';
@@ -45,6 +48,20 @@ function App(){
  useEffect(()=>{let cancelled=false;setOnline('checking');const connect=async()=>{try{await initDesktopRuntime();if(cancelled)return;if(IS_PACE_DESKTOP)setDesktopEndpoint(getApiBase());const data=await wakeServer(()=>!cancelled&&setOnline('waking'));if(cancelled)return;setOnline('online');setProvider(data.ai_provider||'disabled');setSandboxAvailable(Boolean(data.sandbox_available));await refreshList();if(IS_PACE_DESKTOP&&desktopConnectionKind()==='local'&&!wizardShown.current){const state=await json('/desktop/setup/status');if(!state.running||!state.actor_ready){wizardShown.current=true;setDesktopSetupOpen(true);}}}catch(e){if(!cancelled){setOnline('offline');setError(e.message||'Local backend could not start');}}};void connect();return()=>{cancelled=true;};},[boot,refreshList]);
  useEffect(()=>{if(online!=='online'||!telemetryOpen)return;let live=true;const refresh=()=>json('/telemetry').then(v=>live&&setTelemetry(v)).catch(()=>live&&setTelemetry(null));refresh();const timer=setInterval(refresh,12000);return()=>{live=false;clearInterval(timer);};},[telemetryOpen,online]);
  useEffect(()=>{scrollRef.current?.scrollIntoView({behavior:'smooth'});},[messages]);
+ useEffect(()=>()=>{pythonRunRef.current?.cancel();},[]);
+ const executeLocalPython=async()=>{
+  if(runningCode||!code.trim())return;
+  setRunningCode(true);setCodeResult(null);
+  try{
+   const job=createPythonRun(code,{onStatus:setPythonStatus});
+   pythonRunRef.current=job;
+   const result=await job.promise;
+   setCodeResult(result);
+  }catch(e){setCodeResult({status:'error',stdout:'',stderr:e?.message||'Python runner failed'});}
+  finally{pythonRunRef.current=null;setRunningCode(false);setPythonStatus('');}
+ };
+ const stopLocalPython=()=>pythonRunRef.current?.cancel();
+
  const openConversation=async item=>{if(busy)return;setLoadingHistory(true);setActiveId(item.id);setWorkspace(item.workspace);setSidebarOpen(false);try{const res=await json(`/conversations/${encodeURIComponent(item.id)}`);setMessages(res.messages||[]);setDocument(res.document_id?{document_id:res.document_id,displayName:'Saved PDF context'}:null);}catch(e){setError(e.message);}finally{setLoadingHistory(false);}};
  const newChat=()=>{if(busy)return;setActiveId(null);setMessages([]);setDocument(null);setError('');setSidebarOpen(false);inputRef.current?.focus();};
  const send=async e=>{e?.preventDefault?.();if(busy||!text.trim())return;if(workspace==='literacy'&&!document){setError('Upload a PDF to begin literacy mode.');return;}const value=text.trim();setText('');setError('');setBusy(true);const user={role:'user',text:value,id:`local-${Date.now()}`};const assistantId=`reply-${Date.now()}`;setMessages(prev=>[...prev,user,{id:assistantId,role:'assistant',text:''}]);const controller=new AbortController();abortRef.current=controller;try{
@@ -73,11 +90,16 @@ function App(){
   <main id="main" className="main-panel">
    <header className="topbar"><div className="topbar-left"><Button size="sm" variant="ghost" className="mobile-menu" aria-label="Open navigation" onClick={()=>setSidebarOpen(true)}><Menu size={20}/></Button><div><p className="eyebrow">WORKSPACE</p><h1>{activeWorkspace.label}</h1></div></div><div className="topbar-actions"><Badge tone={online==='online'?'success':online==='waking'?'warning':'neutral'}>{online==='waking'&&<LoaderCircle size={12} className="spin"/>}{statusLabel}</Badge><Tooltip text="System telemetry"><Button variant="ghost" size="sm" aria-label="Toggle telemetry" aria-expanded={telemetryOpen} onClick={()=>setTelemetryOpen(x=>!x)}><Activity size={18}/></Button></Tooltip><Tooltip text="Settings"><Button variant="ghost" size="sm" aria-label="Settings" onClick={()=>setSettingsOpen(true)}><Settings size={18}/></Button></Tooltip></div></header>
    {telemetryOpen&&<Card className="telemetry"><div className="telemetry-head"><h2>System telemetry</h2><Badge>Measured on API host</Badge></div>{!telemetry?<p className="muted">Live telemetry is not currently available.</p>:<dl><div><dt>CPU usage</dt><dd>{telemetry.cpu_utilization??'—'}%</dd></div><div><dt>Memory</dt><dd>{telemetry.ram_usage_mb??'—'} MB</dd></div><div><dt>Device</dt><dd>{telemetry.device??'Unknown'}</dd></div><div><dt>Status</dt><dd>{telemetry.status??'Unknown'}</dd></div></dl>}</Card>}
-   {workspace==='coding'&&<div className="coding-tools"><details><summary><TerminalSquare size={16}/> Isolated Python runner <Badge tone={sandboxAvailable?'success':'neutral'}>{sandboxAvailable?'Local Docker enabled':'Hosted execution disabled'}</Badge></summary>
-     <label className="field" htmlFor="sandbox-code"><span>Python source (local sandbox only)</span><textarea id="sandbox-code" spellCheck="false" value={code} maxLength={20000} onChange={e=>setCode(e.target.value)} rows={5} placeholder="Write a short Python exercise"/></label>
-     <div className="runner-actions"><Button size="sm" disabled={!sandboxAvailable||runningCode||!code.trim()} onClick={async()=>{setRunningCode(true);setCodeResult(null);try{setCodeResult(await json('/sandbox/run',{method:'POST',body:{code,timeout:8}}));}catch(e){setCodeResult({status:'error',stderr:e.message});}finally{setRunningCode(false);}}}><Play size={14}/>{runningCode?'Running…':'Run in isolated container'}</Button><span className="small muted">No network access; CPU, memory and time limits.</span></div>
-     {codeResult&&<div className="runner-output" role="status"><strong>Result: {codeResult.status}</strong><pre>{(codeResult.stdout||'')+(codeResult.stderr?'\n'+codeResult.stderr:'')}</pre></div>}
-    </details></div>}
+   {workspace==='coding'&&<div className="coding-tools"><details><summary><TerminalSquare size={16}/> Python runner <Badge tone="success">Runs on your device</Badge></summary>
+     <label className="field" htmlFor="sandbox-code"><span>Python source (local WebAssembly runtime)</span><textarea id="sandbox-code" spellCheck="false" value={code} maxLength={20000} onChange={e=>setCode(e.target.value)} rows={5} placeholder="print('Hello from PACE')"/></label>
+     <div className="runner-actions">
+       <Button size="sm" disabled={runningCode||!code.trim()} onClick={executeLocalPython}><Play size={14}/>{runningCode?'Running…':'Run Python'}</Button>
+       {runningCode&&<Button size="sm" variant="secondary" onClick={stopLocalPython}>Stop</Button>}
+       <span className="small muted">{pythonStatus||'Python 3 runs in a local Web Worker; no Render code execution. 8-second run limit.'}</span>
+     </div>
+     {codeResult&&<div className="runner-output" role="status"><strong>Result: {codeResult.status}</strong><pre>{(codeResult.stdout||'')+(codeResult.stderr?'\n'+codeResult.stderr:'')||'(No output. Use print() to display values.)'}</pre></div>}
+     <p className="small muted">Runs Python locally in a browser worker. Not a hardened security sandbox; do not run untrusted code. Some native Python packages and OS features are unavailable.</p>
+    </details></div>
    <section className="conversation" aria-label="Conversation panel"><div className="conversation-content">
     {loadingHistory?<div className="history-loading"><Skeleton/><Skeleton width="75%"/><Skeleton width="90%"/></div>:messages.length===0?<div className="empty-state"><div className="empty-icon"><activeWorkspace.Icon size={23}/></div><h2>Start with {activeWorkspace.label.toLowerCase()}</h2><p>{activeWorkspace.description}. Responses require a configured, available AI service.</p>{workspace==='literacy'&&<p>Upload a PDF before asking a document question.</p>}{online!=='online'&&<div className="connect-hint"><WifiOff size={16}/><span>The API may be sleeping on Render.</span><Button size="sm" variant="secondary" onClick={()=>setBoot(x=>x+1)}>Retry connection</Button></div>}</div>:<div className="message-list" role="log" aria-live="polite" aria-relevant="additions text">{messages.map((m,i)=><article className={`message ${m.role==='user'?'is-user':''}`} key={m.id||i}><div className="avatar" aria-hidden="true">{m.role==='user'?'Y':'P'}</div><div className="message-body"><strong>{m.role==='user'?'You':'PACE'}</strong><p>{m.text||(busy?'Generating response…':'')}</p></div></article>)}<div ref={scrollRef}/></div>}
    </div></section>
