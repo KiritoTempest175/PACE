@@ -64,7 +64,7 @@ def publish() -> str:
             raise RuntimeError("Space README is missing its Gradio metadata.")
         if "hardware: " not in contents:
             contents = contents.replace(
-                "sdk: gradio", f"sdk: gradio\\nhardware: {HARDWARE}", 1
+                "sdk: gradio", f"sdk: gradio\nhardware: {HARDWARE}", 1
             )
         readme.write_text(contents, encoding="utf-8")
 
