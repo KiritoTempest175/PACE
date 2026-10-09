@@ -111,16 +111,29 @@ cd frontend && npm install && npm run lint && npm test && npm run build
 
 PACE is open-source under the [MIT License](LICENSE).
 
-**Important:** Desktop v0.1.0 is deprecated. That prerelease packaged only
-the React/Tauri frontend and cannot start the FastAPI backend locally.
+**The built-in Python runner now works on the [live website](https://pace-ensemble.netlify.app).**
+Open **Coding → Python runner** and choose **Run Python**. A self-hosted Python
+WebAssembly runtime executes scripts in a local Web Worker without allowing
+arbitrary execution on Render. See [Python runner documentation](docs/PYTHON_RUNNER.md).
+Live Chromium verification: [successful public-site test](https://github.com/KiritoTempest175/PACE/actions/runs/37972848669).
 
-A replacement with a bundled local backend is being validated on the separate
+The desktop application source remains on the independent
 [`feature/tauri-desktop` branch](https://github.com/KiritoTempest175/PACE/tree/feature/tauri-desktop).
-Do not recommend the v0.1.0 installer as a standalone local application.
+PACE Desktop **v0.4.0** has a tested Windows x64 NSIS installer, a bundled
+FastAPI/SQLite backend, Ollama model management and the same local Python runner.
+The Windows installer and source/deployment ZIPs are in the
+[verified v0.4.0 GitHub Actions artifact](https://github.com/KiritoTempest175/PACE/actions/runs/37972608175/artifacts/11637461967).
+Windows installation/startup smoke: [successful test](https://github.com/KiritoTempest175/PACE/actions/runs/37973552672).
 
-Web source is available under `main`; contributors can clone or download the
-repository source ZIP from GitHub. The desktop installer is built from its own
-branch so desktop changes cannot unexpectedly alter the production web app.
+**Release publication status:** the v0.4.0 installer is compiled and tested,
+but GitHub rejected automated publishing with HTTP 403, so v0.4.0 is not yet
+listed in the public Releases tab. The previous public
+[`desktop-v0.3.0` release](https://github.com/KiritoTempest175/PACE/releases/tag/desktop-v0.3.0)
+does **not** include the fixed Python runner. GitHub Actions artifacts require
+GitHub access and expire; a public Release should be created after approval.
+
+Python WebAssembly code execution is not a hardened security sandbox;
+do not run malicious third-party code.
 
 ## Deployment
 
