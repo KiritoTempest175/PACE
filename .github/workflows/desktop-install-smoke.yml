@@ -1,0 +1,42 @@
+name: Verify installed PACE Desktop has bundled backend
+on:
+  push:
+    branches:
+      - feature/tauri-desktop
+    paths:
+      - .github/desktop-install-smoke.request
+permissions:
+  contents: read
+  actions: read
+jobs:
+  install:
+    runs-on: windows-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: PACE-Desktop-Windows-and-Source
+          run-id: 37948009714
+          repository: KiritoTempest175/PACE
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: package
+      - name: Install NSIS package silently and verify backend is installed
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $installer = @(Get-ChildItem package -Recurse -Filter '*setup.exe' | Select-Object -First 1)
+          if ($installer.Count -ne 1) { throw 'Windows installer missing.' }
+          $p = Start-Process -FilePath $installer[0].FullName -ArgumentList '/S' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw ('NSIS exit code: ' + $p.ExitCode) }
+          Start-Sleep -Seconds 5
+          $bins = @(Get-ChildItem $env:LOCALAPPDATA -File -Recurse -Filter 'pace-api.exe' -ErrorAction SilentlyContinue)
+          if ($bins.Count -eq 0) {
+            Get-ChildItem $env:LOCALAPPDATA -Directory | Select-Object FullName
+            throw 'PACE local FastAPI executable not found in installed files.'
+          }
+          $backend = $bins[0]
+          if ($backend.Length -lt 5000000) { throw 'Backend binary unexpectedly small.' }
+          Write-Host ('VERIFIED installed backend: ' + $backend.FullName + ' (' + $backend.Length + ' bytes)')
+          $apps = @(Get-ChildItem $backend.DirectoryName -File -Filter '*PACE*.exe' -ErrorAction SilentlyContinue)
+          if ($apps.Count -eq 0) { throw 'PACE Tauri desktop executable missing from installer directory.' }
+          Write-Host ('VERIFIED installed Tauri GUI: ' + $apps[0].FullName)
