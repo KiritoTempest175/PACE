@@ -1,1 +1,1 @@
-# sandbox package
+"""Opt-in isolated execution modules."""

@@ -1,0 +1,23 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: infra/docker/Dockerfile.backend
+    ports:
+      - '127.0.0.1:8000:8000'
+    env_file: .env
+    environment:
+      DATABASE_URL: sqlite:////app/data/pace.db
+      SANDBOX_ENABLED: 'false'
+    volumes:
+      - pace_db:/app/data
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.frontend
+    ports:
+      - '127.0.0.1:5173:80'
+    depends_on:
+      - api
+volumes:
+  pace_db:

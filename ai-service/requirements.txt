@@ -1,0 +1,5 @@
+# Gradio 6 on ZeroGPU requires huggingface-hub >= 1.16.
+# Transformers 4 requires huggingface-hub < 1: incompatible.
+# Transformers 5 supports the modern HF Hub API. Base image pins Gradio/Spaces/Torch.
+transformers>=5.0,<6
+accelerate>=1.4,<2

@@ -1,0 +1,36 @@
+name: Verify Hugging Face PACE inference
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - phase2/production-hardening-20261009
+    paths:
+      - .github/pace-hf-probe.request
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    environment: HF_TOKEN
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Inspect Hugging Face Space runtime
+        run: python scripts/probe_hf_space.py --runtime
+      - name: Install Gradio client
+        run: python -m pip install --disable-pip-version-check 'gradio-client>=1.5,<3'
+      - name: Test real model inference through Space API
+        run: python scripts/probe_hf_space.py --inference
+      - name: Collect build logs if hosted inference fails
+        if: failure()
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          python -m pip install --disable-pip-version-check 'huggingface_hub>=0.36,<3'
+          python scripts/probe_hf_space.py --build-logs

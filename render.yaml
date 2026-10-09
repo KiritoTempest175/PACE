@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: pace-api
+    runtime: python
+    plan: free
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: uvicorn backend.main:app --host 0.0.0.0 --port $PORT --workers 1
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.11
+      - key: ENVIRONMENT
+        value: production
+      - key: AI_PROVIDER
+        value: huggingface
+      - key: CORS_ORIGINS
+        value: https://pace-ensemble.netlify.app
+      - key: DATABASE_URL
+        sync: false
+      - key: HF_SPACE_ID
+        sync: false
+      - key: HF_TOKEN
+        sync: false
+      - key: SANDBOX_ENABLED
+        value: 'false'

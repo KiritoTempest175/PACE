@@ -1,72 +1,19 @@
-# Data & Models
-data/
-*.csv
-*.jsonl
-*.parquet
-*.pt
-*.pth
-*.ckpt
-*.safetensors
-*.bin
-*.h5
-
-
-
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-*.egg-info/
-.venv/
-venv/
-env/
 .env
 .env.*
-
-# Rust
-target/
-Cargo.lock
-
-# IDEs
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Logs & Experiments
-*.log
-logs/
-wandb/
-mlruns/
-
-# Jupyter
-.ipynb_checkpoints/
-
-# Docker
-*.env.docker
-
-# Temporary
-tmp/
-temp/
-*.tmp
-
-# Ignore ML model weights and training artifacts
-masteries/coding/artifacts/
+!.env.example
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+node_modules/
+frontend/dist/
+uploads/
+*.db
+*.sqlite*
+*.pt
+*.pth
 *.safetensors
 *.bin
-masteries/coding/models/
-UNATTENDED_RUN_REPORT.md
-node_modules/
-
-# App Data
-*.db
-*.sqlite
-*.sqlite3
-pace_database.db
-uploads/
-frontend/dist/
-act_gen.txt
+*.log
+.pytest_cache/
+.coverage
