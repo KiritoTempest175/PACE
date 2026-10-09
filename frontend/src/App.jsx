@@ -92,7 +92,7 @@ function App(){
      </div>
      {codeResult&&<div className="runner-output" role="status"><strong>Result: {codeResult.status}</strong><pre>{(codeResult.stdout||'')+(codeResult.stderr?'\n'+codeResult.stderr:'')||'(No output. Use print() to display values.)'}</pre></div>}
      <p className="small muted">Runs Python locally in a browser worker. Not a hardened security sandbox; do not run untrusted code. Some native Python packages and OS features are unavailable.</p>
-    </details></div>
+    </details></div>}
    <section className="conversation" aria-label="Conversation panel"><div className="conversation-content">
     {loadingHistory?<div className="history-loading"><Skeleton/><Skeleton width="75%"/><Skeleton width="90%"/></div>:messages.length===0?<div className="empty-state"><div className="empty-icon"><activeWorkspace.Icon size={23}/></div><h2>Start with {activeWorkspace.label.toLowerCase()}</h2><p>{activeWorkspace.description}. Responses require a configured, available AI service.</p>{workspace==='literacy'&&<p>Upload a PDF before asking a document question.</p>}{online!=='online'&&<div className="connect-hint"><WifiOff size={16}/><span>The API may be sleeping on Render.</span><Button size="sm" variant="secondary" onClick={()=>setBoot(x=>x+1)}>Retry connection</Button></div>}</div>:<div className="message-list" role="log" aria-live="polite" aria-relevant="additions text">{messages.map((m,i)=><article className={`message ${m.role==='user'?'is-user':''}`} key={m.id||i}><div className="avatar" aria-hidden="true">{m.role==='user'?'Y':'P'}</div><div className="message-body"><strong>{m.role==='user'?'You':'PACE'}</strong><p>{m.text||(busy?'Generating response…':'')}</p></div></article>)}<div ref={scrollRef}/></div>}
    </div></section>
