@@ -21,7 +21,7 @@ def main():
         port = sock.getsockname()[1]
     secret = secrets.token_hex(32)
     user_token = secrets.token_hex(32)
-    with tempfile.TemporaryDirectory(prefix="pace-local-smoke-") as directory:
+    with tempfile.TemporaryDirectory(prefix="pace-local-smoke-", ignore_cleanup_errors=True) as directory:
         env = dict(os.environ)
         env.update({
             "PACE_DESKTOP_PORT": str(port),
