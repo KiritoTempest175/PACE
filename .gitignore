@@ -17,3 +17,9 @@ uploads/
 *.log
 .pytest_cache/
 .coverage
+
+# Tauri desktop local build outputs
+frontend/src-tauri/target/
+frontend/src-tauri/gen/
+frontend/src-tauri/icons/*.ico
+frontend/src-tauri/icons/*.png
