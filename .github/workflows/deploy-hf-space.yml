@@ -18,6 +18,7 @@ concurrency:
 jobs:
   deploy:
     name: Publish PACE AI service
+    environment: HF_TOKEN
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
