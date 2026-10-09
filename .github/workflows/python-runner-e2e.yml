@@ -1,0 +1,58 @@
+name: End-to-end Python runner (real browser)
+on:
+  push:
+    branches:
+      - main
+      - feature/tauri-desktop
+    paths:
+      - .github/python-runner-smoke.request
+permissions:
+  contents: read
+jobs:
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 16
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install locked frontend dependencies
+        working-directory: frontend
+        run: npm ci --no-audit --no-fund
+      - name: Build bundled offline Python runtime
+        working-directory: frontend
+        run: npm run build
+      - name: Check WebAssembly runtime is included
+        run: |
+          test -s frontend/dist/pyodide/pyodide.asm.wasm
+          test -s frontend/dist/pyodide/python_stdlib.zip
+          test -s frontend/dist/pyodide/pyodide.js
+          test -s frontend/dist/python-runner.worker.js
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          base=Path('frontend/dist/pyodide')
+          meta=json.loads((base/'manifest.json').read_text())
+          assert meta['version']=='0.29.5'
+          for name,info in meta['artifacts'].items():
+              assert (base/name).stat().st_size == info['bytes']
+          print('Self-hosted Python assets packaged successfully')
+          PY
+      - name: Install browser automation tools
+        run: |
+          python -m pip install 'playwright==1.55.0'
+          python -m playwright install --with-deps chromium
+      - name: Test actual Python execution and timeout in Chromium
+        working-directory: frontend
+        run: |
+          npm run preview -- --host 127.0.0.1 > /tmp/pace-vite-preview.log 2>&1 &
+          python scripts/smoke_python_runner.py
+      - name: Show Vite logs if failed
+        if: failure()
+        run: cat /tmp/pace-vite-preview.log || true
