@@ -105,7 +105,7 @@ python -m compileall -q backend core masteries ai-service
 cd frontend && npm install && npm run lint && npm test && npm run build
 ```
 
-**Build reproducibility gap:** The provided overlay cannot include a regenerated `frontend/package-lock.json`, because the test environment cannot reach the npm registry. The upstream lockfile is for a different package manifest and must not be reused. Generate a new lock with `npm install`, commit it, then change CI/Netlify/Docker build steps to `npm ci`. The Vite build and frontend component tests have not been executed in the current environment.
+**Reproducible frontend builds:** The regenerated `frontend/package-lock.json` was captured from GitHub Actions and committed. GitHub Actions runs `npm ci`, frontend lint, component tests and Vite production build. Deployment preview, browser accessibility and live AI integration remain unverified.
 
 ## Deployment
 
