@@ -1,0 +1,53 @@
+name: Windows Desktop UI and Local API Integration
+on:
+  push:
+    branches: [feature/tauri-desktop]
+    paths: [.github/desktop-ui-smoke.request]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  gui:
+    runs-on: windows-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/download-artifact@v4
+        with:
+          name: PACE-Desktop-Windows-and-Source
+          run-id: 37948009714
+          repository: KiritoTempest175/PACE
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: package
+      - name: Install WebView2 test client
+        run: python -m pip install 'playwright>=1.49,<2'
+      - name: Install Windows package
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $installer=@(Get-ChildItem package -Recurse -Filter '*setup.exe'|Select-Object -First 1)
+          if ($installer.Count -ne 1) {throw 'Installer not found'}
+          $p=Start-Process $installer[0].FullName -ArgumentList '/S' -PassThru -Wait
+          if ($p.ExitCode -ne 0) {throw "NSIS installation failed"}
+          $dir=Join-Path $env:LOCALAPPDATA 'PACE AI Workspaces'
+          if (-not (Test-Path (Join-Path $dir 'pace-api.exe'))) {throw 'Bundled backend missing'}
+          if (-not (Test-Path (Join-Path $dir 'pace-desktop.exe'))) {throw 'Desktop UI missing'}
+      - name: Exercise real desktop frontend, local API and workspaces
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $mock=Start-Process -FilePath python -ArgumentList 'desktop/mock_ollama.py' -PassThru
+          $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS='--remote-debugging-port=9222 --remote-allow-origins=*'
+          $app=Start-Process (Join-Path $env:LOCALAPPDATA 'PACE AI Workspaces/pace-desktop.exe') -PassThru
+          try {
+            python desktop/smoke_gui.py
+            if ($LASTEXITCODE -ne 0) {throw 'Real Windows GUI test failed'}
+          } finally {
+            if ($app -and -not $app.HasExited) {Stop-Process -Id $app.Id -Force -ErrorAction SilentlyContinue}
+            if ($mock -and -not $mock.HasExited) {Stop-Process -Id $mock.Id -Force -ErrorAction SilentlyContinue}
+            $logs=@(Get-ChildItem $env:LOCALAPPDATA -Recurse -File -Filter 'pace-backend.log' -ErrorAction SilentlyContinue)
+            foreach ($log in $logs) {Get-Content $log.FullName -Tail 30}
+          }
