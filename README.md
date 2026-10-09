@@ -111,14 +111,16 @@ cd frontend && npm install && npm run lint && npm test && npm run build
 
 PACE is open-source under the [MIT License](LICENSE).
 
-- **[PACE Desktop v0.1.0 for Windows (installer .exe)](https://github.com/KiritoTempest175/PACE/releases/download/desktop-v0.1.0/PACE.AI.Workspaces_0.1.0_x64-setup.exe)** — initial unsigned Tauri v2 prerelease for Windows x64
-- **[Desktop client source ZIP](https://github.com/KiritoTempest175/PACE/releases/download/desktop-v0.1.0/PACE_Desktop_Source.zip)** — React/Tauri, Python API, docs and source needed to customize it
-- **[Web application source ZIP](https://github.com/KiritoTempest175/PACE/releases/download/desktop-v0.1.0/PACE_Web_Source.zip)** — React/Vite, FastAPI and supporting source
-- **[Release details and all downloads](https://github.com/KiritoTempest175/PACE/releases/tag/desktop-v0.1.0)**
+**Important:** Desktop v0.1.0 is deprecated. That prerelease packaged only
+the React/Tauri frontend and cannot start the FastAPI backend locally.
 
-The production website source stays on **`main`**. Desktop development lives on the separate **[`feature/tauri-desktop` branch](https://github.com/KiritoTempest175/PACE/tree/feature/tauri-desktop)**.
+A replacement with a bundled local backend is being validated on the separate
+[`feature/tauri-desktop` branch](https://github.com/KiritoTempest175/PACE/tree/feature/tauri-desktop).
+Do not recommend the v0.1.0 installer as a standalone local application.
 
-The desktop app can connect to the hosted PACE API or a PACE backend running locally. It **does not bundle Python, Ollama, or model weights**; offline AI requires the user to install/run the local backend and an appropriate local model. See [desktop setup instructions on the desktop branch](https://github.com/KiritoTempest175/PACE/blob/feature/tauri-desktop/desktop/README.md). The Windows installer is unsigned and compiled on GitHub Actions; desktop GUI testing is still pending.
+Web source is available under `main`; contributors can clone or download the
+repository source ZIP from GitHub. The desktop installer is built from its own
+branch so desktop changes cannot unexpectedly alter the production web app.
 
 ## Deployment
 
