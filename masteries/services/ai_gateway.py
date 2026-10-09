@@ -7,6 +7,7 @@ fallbacks and swallowed provider errors. Local actor/critic uses the actual mode
 from __future__ import annotations
 
 import logging
+import os
 import time
 from functools import lru_cache
 from typing import Iterator
@@ -31,7 +32,7 @@ def ensure_provider_configured() -> None:
 def model_source(speed: str) -> str:
     settings = get_settings()
     if settings.ai_provider == "ollama":
-        return "ollama-same-model-review" if speed == "pro" else "ollama-single-model"
+        return ("ollama-generator-reviewer" if os.environ.get("PACE_DESKTOP_DATA_DIR") else "ollama-same-model-review") if speed == "pro" else "ollama-single-model"
     if settings.ai_provider == "huggingface":
         return "huggingface-single-model-review" if speed == "pro" else "huggingface-single-model"
     return "local-actor-critic" if speed == "pro" else "local-actor"
