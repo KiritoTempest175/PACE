@@ -1,2 +1,1 @@
-Publish PACE Phase 2 AI Space using environment secret HF_TOKEN.
-Attempt 2: 2026-10-09T12:12:00Z.
+Redeploy HF ZeroGPU AI service with compatible Gradio/Spaces dependency handling. 2026-10-09 12:44 UTC.
