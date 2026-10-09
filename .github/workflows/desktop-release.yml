@@ -56,7 +56,7 @@ jobs:
       - name: Freeze local PACE FastAPI backend
         shell: pwsh
         run: |
-          python -m PyInstaller --noconfirm --clean --onefile --noconsole --name pace-api --paths . --collect-all pymupdf --hidden-import fitz --hidden-import masteries.services.ollama_provider --hidden-import masteries.services.telemetry desktop/backend_entry.py
+          python -m PyInstaller --noconfirm --clean --onefile --console --name pace-api --paths . --collect-all pymupdf --collect-submodules sqlalchemy.dialects --hidden-import fitz --hidden-import masteries.services.ollama_provider --hidden-import masteries.services.telemetry desktop/backend_entry.py
           if ($LASTEXITCODE -ne 0) { throw 'PyInstaller build failed.' }
           New-Item -ItemType Directory -Force frontend/src-tauri/binaries | Out-Null
           Copy-Item dist/pace-api.exe frontend/src-tauri/binaries/pace-api-x86_64-pc-windows-msvc.exe
