@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import os
 import secrets
+import sys
 from pathlib import Path
 
 def configure() -> tuple[int, str]:
@@ -22,6 +23,12 @@ def configure() -> tuple[int, str]:
     root = Path(os.environ["PACE_DESKTOP_DATA_DIR"]).resolve()
     root.mkdir(parents=True, exist_ok=True)
     (root / "uploads").mkdir(parents=True, exist_ok=True)
+    # PyInstaller --noconsole sets stdout/stderr to None on Windows.
+    # Uvicorn and its logging dependencies still require writable streams.
+    # Keep diagnostic output local, never print the ephemeral API key.
+    log = (root / "pace-backend.log").open("a", encoding="utf-8", buffering=1)
+    sys.stdout = log
+    sys.stderr = log
     # Always override untrusted environment configuration in this sidecar.
     os.environ.update({
         "ENVIRONMENT": "development",
@@ -53,6 +60,6 @@ def make_app(key: str):
     return app
 
 if __name__ == "__main__":
-    import uvicorn
     port, key = configure()
+    import uvicorn
     uvicorn.run(make_app(key), host="127.0.0.1", port=port, log_level="warning", access_log=False)
