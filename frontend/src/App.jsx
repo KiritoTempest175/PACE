@@ -3,6 +3,7 @@ import {Activity,ArrowUp,BookOpen,Code2,FileText,FlaskConical,Menu,Plus,Settings
 import {Badge,Button,Card,Input,Modal,Skeleton,Tabs,Toast,Tooltip} from './components/ui.jsx';
 import {useTheme} from './ThemeContext.jsx';
 import {json,wakeServer,streamAnswer} from './lib/api.js';
+import {IS_PACE_DESKTOP, DEFAULT_API, getApiBase, setDesktopApiBase, desktopConnectionKind} from './lib/desktopApi.js';
 
 const WORKSPACES=[{id:'coding',label:'Coding',Icon:Code2,description:'Implementation and code explanations'},{id:'literacy',label:'Literacy',Icon:BookOpen,description:'Ask questions about an uploaded PDF'},{id:'research',label:'Research',Icon:FlaskConical,description:'Exploration without verified external citations'}];
 
@@ -19,6 +20,7 @@ function App(){
  const [telemetryOpen,setTelemetryOpen]=useState(false);
  const [telemetry,setTelemetry]=useState(null);
  const [settingsOpen,setSettingsOpen]=useState(false);
+ const [desktopEndpoint,setDesktopEndpoint]=useState(()=>IS_PACE_DESKTOP?getApiBase():'');
  const [sidebarOpen,setSidebarOpen]=useState(false);
  const [notice,setNotice]=useState('');
  const [document,setDocument]=useState(null);
@@ -53,6 +55,7 @@ function App(){
  };
  const uploadPdf=async file=>{if(!file)return;if(!file.name.toLowerCase().endsWith('.pdf')||file.size>8*1024*1024){setError('Select a PDF smaller than 8 MB.');return;}setUploading(true);setError('');try{const data=new FormData();data.append('file',file);const outcome=await json('/upload',{method:'POST',body:data});setDocument({...outcome,displayName:file.name});setNotice('Document processed. You can now ask questions about it.');}catch(e){setError(e.message);}finally{setUploading(false);if(fileRef.current)fileRef.current.value='';}};
  const removeChat=async item=>{if(!window.confirm('Delete this conversation?'))return;try{await json(`/conversations/${encodeURIComponent(item.id)}`,{method:'DELETE'});if(item.id===activeId)newChat();await refreshList();}catch(e){setError(e.message);}};
+ const saveDesktopEndpoint=()=>{if(busy){setError('Wait for the current response before changing endpoints.');return;}try{const next=setDesktopApiBase(desktopEndpoint);setDesktopEndpoint(next);setConversations([]);setActiveId(null);setMessages([]);setDocument(null);setProvider('disabled');setOnline('checking');setSettingsOpen(false);setNotice('Connecting to '+next);setBoot(v=>v+1);}catch(e){setError(e.message);}};
  const activeWorkspace=WORKSPACES.find(w=>w.id===workspace);
  return <div className="app-shell">
   <a href="#main" className="skip-link">Skip to workspace</a>
@@ -80,7 +83,7 @@ function App(){
     <form className="composer" onSubmit={send}><label htmlFor="prompt" className="sr-only">Message PACE</label><textarea id="prompt" ref={inputRef} value={text} maxLength={6000} disabled={busy} onChange={e=>setText(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send(e);}}} placeholder={online==='online'?`Ask about ${activeWorkspace.label.toLowerCase()}…`:'Backend connecting…'} rows={3}/><div className="composer-actions"><Tabs label="Model mode" items={[{value:'fast',label:'Fast'},{value:'pro',label:'Review'}]} value={speed} onChange={setSpeed}/><div className="composer-actions-right"><span className="small muted">{text.length}/6000</span><Button type="submit" disabled={busy||online!=='online'||!text.trim()} aria-label="Send message">{busy?<LoaderCircle size={18} className="spin"/>:<ArrowUp size={18}/>}</Button></div></div></form><p className="composer-footnote">AI output may contain mistakes. Review mode may reuse the same model; it is not independently verified.</p>
    </div>
   </main>
-  <Modal open={settingsOpen} onClose={()=>setSettingsOpen(false)} title="Preferences"><div className="settings-grid"><label className="field"><span>Appearance</span><select value={theme.preference} onChange={e=>theme.setPreference(e.target.value)}><option value="system">Follow system</option><option value="light">Light</option><option value="dark">Dark</option></select></label><div className="settings-info"><strong>AI provider</strong><Badge>{provider}</Badge><p>Provider credentials are managed on the backend and never placed in the browser.</p></div><div className="settings-info"><strong>Sandbox</strong><Badge>Unavailable on hosted free tier</Badge><p>Executing generated programs requires a separate isolated runtime.</p></div></div></Modal>
+  <Modal open={settingsOpen} onClose={()=>setSettingsOpen(false)} title="Preferences"><div className="settings-grid"><label className="field"><span>Appearance</span><select value={theme.preference} onChange={e=>theme.setPreference(e.target.value)}><option value="system">Follow system</option><option value="light">Light</option><option value="dark">Dark</option></select></label>{IS_PACE_DESKTOP&&<div className="settings-info desktop-endpoint"><strong>Desktop API connection</strong><p>The app is installed locally. To run AI offline, start your own PACE backend and local model first.</p><label className="field"><span>Connection type</span><select value={desktopConnectionKind(desktopEndpoint)} onChange={e=>setDesktopEndpoint(e.target.value==='hosted'?DEFAULT_API:'http://127.0.0.1:8000')}><option value="hosted">Hosted PACE API (internet required)</option><option value="local">Local PACE API (user-operated)</option></select></label><label className="field"><span>API origin</span><input type="url" value={desktopEndpoint} onChange={e=>setDesktopEndpoint(e.target.value)} spellCheck={false} placeholder="http://127.0.0.1:8000"/></label><p>Only the official HTTPS API or an HTTP loopback server is permitted. Local usage requires a local Python API and Ollama model.</p><Button variant="secondary" disabled={busy} onClick={saveDesktopEndpoint}>Apply connection</Button></div>}<div className="settings-info"><strong>AI provider</strong><Badge>{provider}</Badge><p>Provider credentials are managed on the backend and never placed in the browser.</p></div><div className="settings-info"><strong>Sandbox</strong><Badge>Unavailable on hosted free tier</Badge><p>Executing generated programs requires a separate isolated runtime.</p></div></div></Modal>
   <Toast message={notice} onClose={()=>setNotice('')}/>
  </div>;
 }
