@@ -1,1 +1,1 @@
-Build PACE Desktop v0.3 with guided Ollama installer, actor/reviewer selection and direct model downloads, frozen FastAPI, NSIS installer and complete source archives. 2026-10-09.
+Build PACE Desktop v0.4.0: Windows x64 NSIS, bundled WebAssembly Python runner, executable FastAPI sidecar, web deploy bundle and editable source. 2026-10-09.
