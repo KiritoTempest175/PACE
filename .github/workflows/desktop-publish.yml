@@ -32,3 +32,4 @@ jobs:
         run: |
           gh release edit desktop-v0.2.0 --repo "$GITHUB_REPOSITORY" --draft=false --prerelease
           gh release view desktop-v0.2.0 --repo "$GITHUB_REPOSITORY" --json isDraft,isPrerelease,url,assets
+          gh release edit desktop-v0.1.0 --repo "$GITHUB_REPOSITORY" --notes 'DEPRECATED: The v0.1.0 installer contains only the frontend and does not run a local backend. Download v0.2.0 instead: https://github.com/KiritoTempest175/PACE/releases/tag/desktop-v0.2.0'
