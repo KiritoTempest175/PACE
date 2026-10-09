@@ -39,12 +39,15 @@ async def security_middleware(request:Request,call_next):
                 for key in stale:
                     del _hits[key]
             q=_hits[peer]
-            while q and q[0] < now-60: q.popleft()
+            while q and q[0] < now-60:
+                q.popleft()
             if len(q)>=settings.rate_limit_per_minute:
                 response=JSONResponse({'detail':'Rate limit exceeded'},status_code=429,headers={'Retry-After':'60'})
             else:
-                q.append(now);response=None
-        if response is None: response=await call_next(request)
+                q.append(now)
+                response=None
+        if response is None:
+            response=await call_next(request)
     else:
         response=await call_next(request)
     response.headers['X-Content-Type-Options']='nosniff'
