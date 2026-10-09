@@ -1,0 +1,7 @@
+# Optional extra dependencies for original local actor/critic training classes.
+# Install the correct CPU or CUDA-enabled PyTorch for your platform FIRST.
+-r backend/requirements.txt
+torch>=2.5,<3
+transformers>=4.49,<5
+accelerate>=1,<2
+safetensors>=0.4,<1

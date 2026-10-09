@@ -1,56 +1,39 @@
-from pydantic import BaseModel
-from typing import Optional, List, Any
-
+"""Strict request and response contracts."""
+from typing import Literal
+from pydantic import BaseModel, Field, ConfigDict
 
 class PredictRequest(BaseModel):
-    text: str
-    mode: Optional[str] = "coding"
-    speed_mode: Optional[str] = "pro"
-    conversation_id: Optional[str] = None
-
+    model_config = ConfigDict(extra='forbid', str_strip_whitespace=True)
+    text: str = Field(min_length=1, max_length=6000)
+    mode: Literal['coding','literacy','research'] = 'coding'
+    speed_mode: Literal['fast','pro'] = 'fast'
+    document_id: str | None = Field(default=None, max_length=48, pattern=r'^doc-[0-9a-f-]{36}$')
+    conversation_id: str | None = Field(default=None, max_length=72, pattern=r'^chat-[0-9a-f-]{32,36}$')
 
 class PredictResponse(BaseModel):
     prediction: str
-    status: str
-
-
-class TelemetryResponse(BaseModel):
-    vram_allocated_mb: Optional[float] = None
-    vram_total_mb: Optional[float] = None
-    vram_percent: Optional[float] = None
-    gpu_utilization: Optional[float] = None
-    cpu_utilization: Optional[float] = None
-    ram_usage_mb: Optional[float] = None
-    actor_model: str
-    critic_model: str
-    tokens_per_sec: Optional[float] = None
-    latency_ms: Optional[int] = None
-    ttft_ms: Optional[int] = None
-    generation_time_s: Optional[float] = None
-    tokens_generated: Optional[int] = None
-    device: str
-    status: str
-    timestamp: Optional[float] = None
-
+    status: Literal['success','unavailable']
 
 class CreateConversationRequest(BaseModel):
-    title: Optional[str] = "New Session"
-    workspace: Optional[str] = "coding"
+    model_config = ConfigDict(extra='forbid', str_strip_whitespace=True)
+    title: str = Field(default='New session', min_length=1, max_length=120)
+    workspace: Literal['coding','literacy','research'] = 'coding'
 
+class TelemetryResponse(BaseModel):
+    status: str
+    device: str
+    cpu_utilization: float | None = None
+    ram_usage_mb: float | None = None
+    gpu_utilization: float | None = None
+    vram_allocated_mb: float | None = None
+    vram_total_mb: float | None = None
+    tokens_per_sec: float | None = None
+    latency_ms: int | None = None
+    actor_model: str | None = None
+    critic_model: str | None = None
 
-class MessageSchema(BaseModel):
-    id: str
-    role: str
-    text: str
-    source: Optional[str] = None
-    status: Optional[str] = None
-    created_at: str
-
-
-class ConversationSchema(BaseModel):
-    id: str
-    title: str
-    workspace: str
-    created_at: str
-    updated_at: str
-    messages: Optional[List[MessageSchema]] = None
+class CodeRunRequest(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    code: str = Field(min_length=1,max_length=20000)
+    test_code: str | None = Field(default=None,max_length=10000)
+    timeout: int = Field(default=8,ge=1,le=20)

@@ -1,293 +1,126 @@
-# 🚀 PACE: Pipelined Actor-Critic Ensemble
+# PACE — Pipelined Actor-Critic Ensemble
 
-> **High-Performance Heterogeneous Micro-Agent AI Microservice for Local Code Generation, Document Literacy & Research Synthesis**
+PACE is a work-in-progress AI productivity workspace for coding, PDF literacy and research exploration. Its React/Vite frontend communicates with a FastAPI application that stores anonymous-session conversations and extracted PDF text in SQLite (local) or hosted PostgreSQL. Inference is provided through **one of three explicit modes**, selected via configuration.
 
-![Python](https://img.shields.io/badge/Python-3.10%2B-blue?style=for-the-badge&logo=python)
-![FastAPI](https://img.shields.io/badge/FastAPI-0.110.0-009688?style=for-the-badge&logo=fastapi)
-![React](https://img.shields.io/badge/React-Vite-61DAFB?style=for-the-badge&logo=react)
-![PyTorch](https://img.shields.io/badge/PyTorch-2.2%2B-EE4C2C?style=for-the-badge&logo=pytorch)
-![Rust](https://img.shields.io/badge/Rust-PyO3-000000?style=for-the-badge&logo=rust)
-![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?style=for-the-badge&logo=docker)
+The hosted Hugging Face service uses a **single pretrained instruction model**, not the original independently trained actor-critic models. The `local` provider uses the original Python actor and critic classes and only describes an answer as independently reviewed if both models actually execute. `ollama` is a local single-model option with an optional second-pass review. No published quality metric or factual verification is claimed.
 
----
+## Features and limitations
 
-## 📌 Core Thesis & Executive Summary
+| Feature | Implementation status |
+|---|---|
+| Coding workspace | Real provider inference; optional restricted Docker Python exercise runner on local development only |
+| PDF literacy | Strict upload validation, extracted-text persistence, bounded keyword excerpts, conversation/document association; not semantic RAG |
+| Research workspace | Real model-generated exploratory responses, **without** verified source retrieval or citations |
+| Actor / critic | Original local actors/critics callable in `AI_PROVIDER=local` and Review mode; not benchmarked in this patch |
+| Hugging Face ZeroGPU | Gradio generator and single pretrained model; Review uses the **same** model twice; quota and hardware restrictions apply |
+| Ollama | Local HTTP streaming from configured model; Review uses the same model twice |
+| Persistence | SQLite locally; PostgreSQL via Neon (or equivalent) on Render; anonymous bearer session, **not accounts** |
+| Realtime telemetry | API-host CPU/RAM/GPU measurements if available; not ZeroGPU telemetry or browser GPU |
+| Rust tokenizer | No working Rust PyO3 extension found in the inspected upstream tree; configurable approximate Python fallback; model tokenizer used for actual inference |
+| Security | UUID PDF paths, parsed PDFs, page/text limits, request-body ceiling, limited CORS, rate limits, safe errors, session-owned reads, opt-in isolated execution |
+| Full production verification | **Not complete.** Requires integration/deployment tests and authorization to deploy services. |
 
-An ensemble of specialized micro-models can eliminate AI hallucinations and outperform massive monolithic LLMs through a rigorous **Actor-Critic validation loop**. 
-
-**PACE (Pipelined Actor-Critic Ensemble)** is engineered from the ground up to operate within strict hardware constraints while delivering high-integrity AI model inference, interactive code generation, document literacy synthesis, and research exploration on consumer hardware.
-
-- **Target Hardware**: NVIDIA RTX 4060 (8GB VRAM), 16GB RAM / CPU Fallback
-- **Core Constraint**: Never exceed 8GB VRAM; hot-swap models dynamically
-- **Scope**: Engineering Microservice Platform + Published Research System
-
-By pairing an **Actor model** (responsible for initial token generation) with a **Critic model** (responsible for AST analysis, safety auditing, and iterative logical correction), PACE guarantees higher quality code outputs and validated responses while maintaining real-time performance telemetry.
-
----
-
-## 🗺 Table of Contents
-
-- [Core Thesis & Executive Summary](#-core-thesis--executive-summary)
-- [Overview & Key Features](#-overview--key-features)
-- [Architecture & Workflow](#-architecture--workflow)
-- [Masteries Overview (Domain Experts)](#-masteries-overview-domain-experts)
-- [System Components & Repository Map](#-system-components--repository-map)
-- [Security Architecture](#-security-architecture)
-- [Hardware & Telemetry Engine](#-hardware--telemetry-engine)
-- [Hardware Budget Analysis](#-hardware-budget-analysis)
-- [Installation & Setup](#-installation--setup)
-- [API Reference](#-api-reference)
-- [Docker & Containerized Deployment](#-docker--containerized-deployment)
-- [Author & Acknowledgments](#-author--acknowledgments)
-
----
-
-## ✨ Overview & Key Features
-
-- 🎭 **Actor-Critic Ensemble Pipeline**: Streamlined generation with dynamic iterative self-correction loops where Critic inspects Actor output before completion.
-- ⚡ **Local Hardware Optimization**: Efficiently schedules VRAM and RAM allocations; integrates natively with local **Ollama** models (e.g., `llama3.2:1b`) and PyTorch/HuggingFace Transformers.
-- 🔒 **Isolated Subprocess Sandbox**: Executes LLM-generated code safely in non-blocking child processes with test harnesses and strict execution timeouts.
-- 📊 **Real-Time Telemetry & Monitoring**: Live monitoring of VRAM usage, CPU/GPU load, Time-To-First-Token (TTFT), tokens-per-second (TPS), and total request latency via Server-Sent Events (SSE).
-- 📄 **PDF & Document Literacy Engine**: Integrated PDF parsing, chunking, and contextual query processing using `PyMuPDF`.
-- 🦀 **Rust-Powered Tokenization**: PyO3 Rust extensions for high-speed custom token handling.
-- 💾 **SQLite History & Multi-Workspace Persistence**: Persistent conversation tracking and workspace state management stored in SQLite (`backend/pace.db`).
-- 🎨 **Modern React / Vite Dashboard**: Dark & Light theme interface featuring live performance meters, speed mode selection (Pro vs. Fast), code highlighting, and session controls.
-
----
-
-## 🏗 Architecture & Workflow
-
-The PACE architecture operates via a decoupled microservice layout connecting the Frontend dashboard, FastAPI backend, Domain Masteries, Sandbox Execution Engine, and Hardware Telemetry System.
+## Architecture
 
 ```mermaid
-flowchart TD
-    subgraph Client ["Frontend (React / Vite)"]
-        UI["Chat Interface & Telemetry Dashboard"]
-    end
-
-    subgraph Backend ["FastAPI Microservice (Port 8000)"]
-        Router["masteries/api/router.py"]
-        DB[("SQLite (backend/pace.db)")]
-        Telem["Telemetry Engine"]
-    end
-
-    subgraph Orchestrator ["Actor-Critic Ensemble"]
-        Actor["Actor Engine (Ollama / HF Transformer)"]
-        Critic["Critic Engine (AST Audit & Logic Verification)"]
-    end
-
-    subgraph Sandbox ["Secure Execution Sandbox"]
-        Subprocess["Isolated Python Subprocess"]
-    end
-
-    UI -->|"POST /generate (SSE)"| Router
-    Router -->|"Log Sessions & Messages"| DB
-    Router -->|"Poll System Stats"| Telem
-    Router --> Actor
-    Actor -->|"Draft Solution"| Critic
-    Critic -->|"Validate / AST Check"| Subprocess
-    Subprocess -->|"Feedback / Reward Signal"| Critic
-    Critic -->|"Verified Stream"| Router
-    Router -->|"Live Tokens + Telemetry SSE"| UI
+flowchart LR
+    Client[React / Netlify] -->|HTTPS, session header| Api[FastAPI / Render]
+    Api -->|SQLAlchemy| Neon[(Hosted PostgreSQL)]
+    Api -->|Gradio client with server-side token| HF[HF Gradio ZeroGPU]
+    Local[Local React] --> ApiLocal[Local FastAPI]
+    ApiLocal --> Sqlite[(SQLite)]
+    ApiLocal -->|configured| Ollama[Local Ollama]
+    ApiLocal -->|configured| Models[Original local actor and critic]
+    ApiLocal -.->|disabled by default| Sandboxed[Local Docker sandbox]
 ```
 
-### Request Flow Modes:
-- **Fast Mode (Latency-Optimized)**: Tokenize $\rightarrow$ Load Actor $\rightarrow$ Inference $\rightarrow$ Return Response stream.
-- **Pro Mode (Accuracy-Optimized)**: Tokenize $\rightarrow$ Load Actor $\rightarrow$ Generate initial code/text $\rightarrow$ Load Critic $\rightarrow$ Evaluate AST & logic $\rightarrow$ (If Fail: Inject Feedback into Prompt, Loop back to Actor. Max 5 iterations) $\rightarrow$ Return verified output.
+## Repository layout
 
----
+- `frontend/`: accessible workspace UI and reusable controls, Vite build and tests.
+- `backend/`: FastAPI entrypoint, request-body protection, deployment dependencies.
+- `masteries/api/`: validated HTTP contracts and per-session endpoints.
+- `masteries/services/`: real model provider adapters, PDF ingestion, persistence, tokenizer fallback and context retrieval.
+- `masteries/*/training/`: upstream local actor/critic classes, retained in the original repository.
+- `masteries/*/inference/`: compatibility generator entrypoints; no fabricated answers.
+- `core/`: configuration and sandbox.
+- `ai-service/`: separately deployable Hugging Face Gradio Space.
+- `docs/`: design, audit mapping, file changes, platform deployment instructions.
 
-## 🎯 Masteries Overview (Domain Experts)
+## Local setup
 
-The system is divided into three domain experts ("Masteries"). Each Mastery consists of a paired **Actor** (generator) and **Critic** (validator), forming a self-correcting loop.
-
-| Mastery | Actor (Generator) | Critic (Validator) | Objective Verification |
-|---|---|---|---|
-| 💻 **Coding** | Writes code from prompt/spec | Checks syntax, logic, test-pass probability | Unit tests execute and pass in isolated sandbox |
-| 📖 **Literacy** | Summarizes, rewrites, answers from local text | Checks factual consistency, hallucination | Claim-to-source sentence mapping (NLI) |
-| 🔬 **Research** | Synthesizes live web/academic sources into reviews | Verifies citation existence and claim accuracy | Regex checks citation IDs; NLI verifies abstract match |
-
-**Critical Principle:** Each Critic has an objective verification mechanism to ensure factual and logical validity.
-
----
-
-## 📂 System Components & Repository Map
-
-```
-PACE/
-├── backend/                  # FastAPI main application & SQLite DB storage
-│   ├── main.py               # FastAPI entry point & CORS configuration
-│   └── pace.db               # Persistent SQLite database
-├── core/                     # Core system modules
-│   ├── sandbox/              # Subprocess execution harness for untrusted code
-│   │   └── executor.py       # Isolated Python script runner with timeouts
-│   ├── security/             # Input validation and code watermarking
-│   ├── tokenizers/           # Custom Rust tokenization bindings (Cargo & PyO3)
-│   └── vram_scheduler/       # Dynamic VRAM memory management and allocation
-├── frontend/                 # React + Vite UI Dashboard
-│   ├── src/
-│   │   ├── components/       # ChatInterface, HardwareMonitor, Sidebar, etc.
-│   │   ├── ThemeContext.jsx  # Dark/Light mode theme state
-│   │   └── styles.css        # Custom Vanilla CSS design system
-│   ├── package.json
-│   └── vite.config.js
-├── masteries/                # Domain-specific engine modules
-│   ├── api/                  # FastAPI routers, endpoints & Pydantic schemas
-│   │   ├── router.py         # Main routes (/generate, /telemetry, /conversations, /upload)
-│   │   └── schemas.py        # API Request/Response schemas
-│   ├── coding/               # Coding Mastery Engine
-│   │   └── inference/        # Actor-Critic Orchestrators (v4), generate & predict
-│   ├── literacy/             # Technical document processing & corpus handling
-│   ├── research/             # Literature synthesis & attention analysis engine
-│   └── services/             # Telemetry, Database, Ollama, PDF Parser, Chunker
-├── infra/                    # Deployment & Infrastructure
-│   ├── docker/               # Dockerfiles (backend, sandbox, frontend) & docker-compose.yml
-│   └── setup_cuda.sh         # CUDA environment setup helper script
-├── pyproject.toml            # Project setup & metadata
-├── requirements.txt          # Python dependencies
-└── README.md                 # Project Documentation
-```
-
----
-
-## 🔒 Security Architecture
-
-| Layer | Threat | Mitigation |
-|---|---|---|
-| **Input Sanitization** | Prompt injection, oversized payloads | Max token limits, regex filters, payload size caps |
-| **Model Runtime** | Adversarial inputs causing OOM | Input caps, execution timeouts, VRAM watchdog thread |
-| **API Access** | Quota abuse, unauthorized requests | CORS domain policies, rate limiting, request validation |
-| **Code Execution** | Arbitrary code execution | **Isolated Sandboxing**: Isolated Python subprocess with read/write temp isolation, CPU timeouts |
-
----
-
-## 📈 Hardware & Telemetry Engine
-
-The PACE Telemetry Engine (`masteries/services/telemetry.py`) provides real-time system monitoring during inference:
-
-- **GPU Metrics**: Device identification, allocated VRAM (MB), total VRAM (MB), VRAM usage %, GPU utilization.
-- **Host Metrics**: CPU utilization %, RAM usage (MB).
-- **Inference Metrics**: Latency (ms), Time-To-First-Token (TTFT in ms), execution duration (seconds), tokens generated, generation speed (Tokens/Sec).
-
----
-
-## 💡 Hardware Budget Analysis (RTX 4060 8GB)
-
-| Component | Fast Tier (GB) | Pro Tier (GB) |
-|---|---|---|
-| **Actor Model** (~3B params, FP16) | ~4.5 | ~4.5 |
-| **Critic Model** (~1.5B params, FP16) | — | ~2.5 |
-| **Activation Cache** (max sequence) | ~0.8 | ~0.8 |
-| **PyTorch CUDA Overhead** | ~1.2 | ~1.2 |
-| **System / Display Reserve** | ~0.5 | ~0.5 |
-
-> **Key Insight**: PyTorch CUDA context initialization creates an initial ~1.2GB floor. Hot-swapping models ensures Peak VRAM usage remains strictly under the 8GB limit.
-
----
-
-## ⚡ Installation & Setup
-
-### Prerequisites
-- **Python**: `>= 3.10`
-- **Node.js**: `>= 18.0` (for Frontend)
-- **NVIDIA GPU** *(Optional, recommended)*: CUDA 12.1+ for PyTorch GPU acceleration.
-- **Ollama** *(Optional, recommended)*: Installed locally with `llama3.2:1b` or compatible model pulled.
-
----
-
-### 1. Clone & Setup Python Environment
+Python 3.10+ for FastAPI, Node 20+ for the React frontend; use Python 3.10.13 or 3.12.12 as supported by the selected ZeroGPU runtime in your Space. Do not commit local `.env` files.
 
 ```bash
-git clone https://github.com/KiritoTempest175/PACE.git
-cd PACE
-
-# Create virtual environment
+cp .env.example .env
 python -m venv .venv
-
-# Activate virtual environment
-# Windows:
-.venv\Scripts\activate
-# Linux/macOS:
-source .venv/bin/activate
+# Activate the virtual environment for your operating system.
+pip install -r backend/requirements.txt
+uvicorn backend.main:app --reload --port 8000
 ```
 
-### 2. Install PyTorch & Dependencies
+In a separate terminal:
 
-For CUDA-accelerated GPU support (RTX series or similar):
-```bash
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
-```
-
-Install standard project dependencies:
-```bash
-pip install -r requirements.txt
-pip install -e .
-```
-
----
-
-### 3. Run Backend Server
-
-```bash
-# Start FastAPI backend via uvicorn
-uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
-```
-The API documentation will be available at [http://localhost:8000/docs](http://localhost:8000/docs).
-
----
-
-### 4. Run Frontend Dashboard
-
-In a separate terminal window:
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
-Open [http://localhost:5173](http://localhost:5173) in your browser to access the PACE dashboard.
 
----
+With `AI_PROVIDER=disabled` CRUD and PDF features work, but the model correctly returns an unavailable error. For actual local inference choose `AI_PROVIDER=ollama` and install/run the model referenced by `OLLAMA_MODEL`. For original actor/critic models choose `AI_PROVIDER=local` and install `requirements-local-ai.txt` together with a suitable PyTorch CPU/CUDA build. A local GPU with 8 GB VRAM may **not** run all original model variants simultaneously; choose smaller variants or sequential loading and benchmark independently.
 
-## 📡 API Reference
+For Compose run `docker compose up --build` with `.env` present. SQLite is stored in a persistent **local Docker volume**. Hosted Render must use a hosted database.
 
-| Endpoint | Method | Description |
-| :--- | :--- | :--- |
-| `/health` | `GET` | Health check endpoint returning `{ "status": "healthy" }` |
-| `/telemetry` | `GET` | Returns real-time GPU/CPU/RAM hardware utilization & performance stats |
-| `/generate` | `POST` | Primary stream endpoint: accepts prompt, runs Actor-Critic pipeline, streams SSE events |
-| `/predict` | `POST` | Direct code generation endpoint (returns single batch prediction response) |
-| `/upload` | `POST` | Upload PDF file for text extraction, chunking, and literacy parsing |
-| `/conversations` | `GET` | List all historical chat sessions stored in SQLite |
-| `/conversations` | `POST` | Create a new conversation session |
-| `/conversations/{id}` | `GET` | Fetch specific conversation session and message history |
-| `/conversations/{id}` | `DELETE`| Remove conversation session |
+### Optional local sandbox
 
----
-
-## 🐳 Docker & Containerized Deployment
-
-PACE includes a containerized multi-service setup orchestrated by Docker Compose:
-
-- **`backend`**: FastAPI service running python backend services (Port `8000`).
-- **`sandbox`**: Resource-restricted isolated container (`256M RAM` limit, `0.5 CPU` cap, no external network access) for safe execution of untrusted code.
-- **`frontend`**: Production build of Vite/React served via Nginx (Port `5173`).
-
-### Launch with Docker Compose:
+Execution is disabled by default and always disabled in production mode. For local trusted environments build the sandbox image, then set `ENVIRONMENT=development` and `SANDBOX_ENABLED=true` before running the FastAPI process on a machine with a Docker daemon.
 
 ```bash
-cd infra/docker
-docker compose up --build -d
+docker build -f infra/docker/Dockerfile.sandbox -t pace-sandbox:local .
 ```
 
-To stop containers:
+The runner has no network, no host mounts, drops capabilities, uses a read-only filesystem, unprivileged UID and CPU/memory/PID/time limits. The AST import filter is **not** a separate security boundary. Do not expose a Docker socket or local sandbox to an untrusted public service.
+
+## API contract
+
+| Endpoint | Behavior |
+|---|---|
+| `GET /health` | API process health and model configuration, not proof a remote model works |
+| `GET /telemetry` | Current API-host performance counters |
+| `GET/POST /conversations` | Session-scoped history |
+| `GET/DELETE /conversations/{id}` | Session-scoped reads/deletes |
+| `POST /upload` | PDF-only text ingestion, generated document ID, uploaded binary deleted |
+| `DELETE /documents/{id}` | Deletes only a document owned by the caller's session |
+| `POST /predict` | Complete result or explicit 503 on failure |
+| `POST /generate` | Streaming SSE `init`, `token`, `done` OR `error` frames. After headers, failure uses an error event rather than 503. |
+| `POST /sandbox/run` | Local-only isolated runner, opt-in; otherwise 503 |
+
+All endpoints except `/` and `/health` require a client-generated random `X-PACE-Session` bearer token. Tokens allow access to their matching records; they do **not** establish a user identity. Treat them as secrets and avoid uploading sensitive documents before full authentication, data retention, privacy and backups are implemented.
+
+## Tests
+
 ```bash
-docker compose down
+pip install -r requirements-dev.txt
+pytest -q tests
+python -m compileall -q backend core masteries ai-service
+cd frontend && npm install && npm run lint && npm test && npm run build
 ```
 
----
+**Build reproducibility gap:** The provided overlay cannot include a regenerated `frontend/package-lock.json`, because the test environment cannot reach the npm registry. The upstream lockfile is for a different package manifest and must not be reused. Generate a new lock with `npm install`, commit it, then change CI/Netlify/Docker build steps to `npm ci`. The Vite build and frontend component tests have not been executed in the current environment.
 
-## 👤 Author & Acknowledgments
+## Deployment
 
-- **Author**: Muhammad Huzaifa Zaman ([huzaifazaman38@gmail.com](mailto:huzaifazaman38@gmail.com))
-- **Repository**: [KiritoTempest175/PACE](https://github.com/KiritoTempest175/PACE)
-- **License**: Open Source Project
+Refer to [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for platform-specific settings, env tables and verification. The architecture is designed to fit zero-recurring-hosting-cost **quotas**, not zero operational limits. ZeroGPU eligibility and daily quotas can change. Render Free spins down and has ephemeral local storage. PostgreSQL persistence must be configured separately.
+
+## Screenshot placeholders
+
+- `docs/screenshots/workspace-light.png`
+- `docs/screenshots/workspace-dark.png`
+- `docs/screenshots/literacy-upload.png`
+- `docs/screenshots/sandbox-local.png`
+- `docs/screenshots/mobile.png`
+
+These are placeholders, not screenshots of a verified deployed application.
+
+## Security and scope disclosure
+
+The 22 backend contract tests exercise selected security and persistence boundaries without external GPU/network calls. They do not establish universal correctness, formal container isolation, accessibility compliance, dependency safety, or actual GPU performance. No external deployment was performed by this delivery. For a list of remaining issues, consult [docs/AUDIT_MATRIX.md](docs/AUDIT_MATRIX.md).
