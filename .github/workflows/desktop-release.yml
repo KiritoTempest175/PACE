@@ -71,6 +71,22 @@ jobs:
       - name: Build Tauri NSIS installer
         working-directory: frontend
         run: npx --yes @tauri-apps/cli@2.12.1 build --bundles nsis
+      - name: Verify self-contained Python runtime is packaged
+        shell: pwsh
+        run: |
+          $dist='frontend/dist'
+          foreach ($relative in @('python-runner.worker.js','pyodide/pyodide.js','pyodide/pyodide.asm.wasm','pyodide/python_stdlib.zip','pyodide/manifest.json')) {
+            $asset=Join-Path $dist $relative
+            if (-not (Test-Path $asset)) { throw ('Missing local Python runtime asset: ' + $relative) }
+          }
+          $runtime=Get-Item (Join-Path $dist 'pyodide/pyodide.asm.wasm')
+          if ($runtime.Length -lt 1000000) { throw 'Embedded Python WebAssembly runtime is incomplete.' }
+          Write-Host ('Verified self-hosted Python WebAssembly: '+$runtime.Length+' bytes')
+      - name: Package deploy-ready web build (with offline Python runtime)
+        shell: pwsh
+        run: |
+          Compress-Archive -Path 'frontend/dist/*' -DestinationPath 'PACE_Web_Deploy_Bundle.zip' -CompressionLevel Optimal
+          if (-not (Test-Path 'PACE_Web_Deploy_Bundle.zip')) { throw 'Web deploy bundle missing.' }
       - name: Verify installer exists
         shell: pwsh
         run: |
@@ -96,6 +112,7 @@ jobs:
           path: |
             frontend/src-tauri/target/release/bundle/nsis/*.exe
             PACE_Web_Source.zip
+            PACE_Web_Deploy_Bundle.zip
             PACE_Desktop_Source.zip
             PACE_Complete_Source.zip
           retention-days: 30
@@ -106,13 +123,13 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $tag = 'desktop-v0.3.0'
+          $tag = 'desktop-v0.4.0'
           $repo = $env:GITHUB_REPOSITORY
           gh release view $tag --repo $repo 2>$null
           if ($LASTEXITCODE -ne 0) {
-            gh release create $tag --repo $repo --target $env:GITHUB_SHA --draft --title 'PACE Desktop 0.3.0 (Windows, Ollama setup and model manager)' --notes 'PACE Desktop 0.3 includes a local FastAPI backend, in-app Ollama installation and 1B-8B model downloads. Pro mode allows separate Generator and Reviewer models; model weights download with user consent. Unsigned prerelease.'
+            gh release create $tag --repo $repo --target $env:GITHUB_SHA --draft --title 'PACE Desktop 0.4.0 (Windows, Ollama setup and model manager)' --notes 'PACE Desktop 0.4 includes a local FastAPI backend, Ollama model setup and a locally bundled Python WebAssembly coding runner in web and desktop. Coding/PDF/research preserved, CPU timeout with Stop control. User code executes in a browser worker, not on Render. Unsigned prerelease.'
             if ($LASTEXITCODE -ne 0) { throw 'Unable to create GitHub draft release.' }
           }
           $installer = @(Get-ChildItem 'frontend/src-tauri/target/release/bundle/nsis' -Filter '*.exe' | Select-Object -First 1)
-          gh release upload $tag --repo $repo $installer.FullName PACE_Web_Source.zip PACE_Desktop_Source.zip PACE_Complete_Source.zip --clobber
+          gh release upload $tag --repo $repo $installer.FullName PACE_Web_Source.zip PACE_Web_Deploy_Bundle.zip PACE_Desktop_Source.zip PACE_Complete_Source.zip --clobber
           if ($LASTEXITCODE -ne 0) { throw 'Unable to upload release assets.' }
