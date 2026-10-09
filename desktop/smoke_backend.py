@@ -9,6 +9,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import traceback
 import urllib.error
 import urllib.request
 
@@ -27,6 +28,7 @@ def main():
             "PACE_DESKTOP_KEY": secret,
             "PACE_DESKTOP_DATA_DIR": directory,
         })
+        print("Starting frozen backend on port", port, flush=True)
         proc = subprocess.Popen([str(binary)], env=env, cwd=directory)
         try:
             origin = f"http://127.0.0.1:{port}"
@@ -41,17 +43,22 @@ def main():
                     urllib.request.Request(origin + path, data=data,
                                            method=method, headers=headers),
                     timeout=8)
-            for i in range(55):
+            for i in range(25):
                 if proc.poll() is not None:
                     raise RuntimeError(f"Frozen backend exited with {proc.returncode}")
                 try:
                     with req("/health") as response:
                         health = json.load(response)
                     break
-                except (urllib.error.URLError, TimeoutError):
+                except urllib.error.HTTPError as exc:
+                    message=exc.read().decode("utf-8", errors="replace")
+                    raise RuntimeError(f"Health request returned HTTP {exc.code}: {message[:500]}") from exc
+                except (urllib.error.URLError, TimeoutError, OSError) as exc:
+                    if i % 4 == 0:
+                        print(f"Waiting for backend ({i}): {type(exc).__name__}: {exc}", flush=True)
                     time.sleep(1)
             else:
-                raise RuntimeError("Frozen backend did not start within 55s")
+                raise RuntimeError("Frozen backend did not start within 25 attempts")
             assert health["status"]=="healthy", health
             assert health["ai_provider"]=="ollama", health
             try:
