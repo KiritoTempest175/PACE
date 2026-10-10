@@ -67,7 +67,8 @@ def _huggingface_stream(text: str, mode: str, speed: str) -> Iterator[str]:
             last = snapshot
         if not last.strip():
             raise AIUnavailable("AI service returned no content")
-    except AIUnavailable:
+    except AIUnavailable as exc:
+        log.warning("Hugging Face response rejected: %s", str(exc))
         raise
     except Exception as exc:
         log.warning("Remote inference failed (%s)", type(exc).__name__)
