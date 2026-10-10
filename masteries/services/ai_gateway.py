@@ -66,6 +66,20 @@ def _huggingface_stream(text: str, mode: str, speed: str) -> Iterator[str]:
                 yield delta
             last = snapshot
         if not last.strip():
+            status = job.status()
+            job_error = None
+            if job.done():
+                try:
+                    job_error = job.exception(timeout=0)
+                except Exception:
+                    pass
+            log.warning(
+                "Hugging Face completed without tokens (status=%s, success=%s, exception_type=%s, detail=%s)",
+                getattr(status, "code", None),
+                getattr(status, "success", None),
+                type(job_error).__name__ if job_error else None,
+                str(job_error)[:200] if job_error else None,
+            )
             raise AIUnavailable("AI service returned no content")
     except AIUnavailable as exc:
         log.warning("Hugging Face response rejected: %s", str(exc))
