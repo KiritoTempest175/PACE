@@ -22,8 +22,7 @@ jobs:
           for i in range(12):
               try:
                   client=Client("Kiritox07/pace-phase2-ai",verbose=False)
-                  api=client.view_api(print_info=False)
-                  if "/generate_cpu" not in str(api):
+                  if not any(getattr(endpoint,"api_name",None)=="/generate_cpu" for endpoint in client.endpoints.values()):
                       raise RuntimeError("Space is not yet serving CPU fallback")
                   print("CPU endpoint ready",flush=True)
                   break
