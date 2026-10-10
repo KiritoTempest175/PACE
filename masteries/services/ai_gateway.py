@@ -48,15 +48,18 @@ def _huggingface_stream(text: str, mode: str, speed: str) -> Iterator[str]:
     started = time.monotonic()
     # The Space is public. Some HF ZeroGPU identities have separate quotas.
     # Retry anonymously only if an authenticated job failed before any output.
-    credentials = [settings.hf_token]
+    attempts = [(settings.hf_token, "/generate")]
     if settings.hf_token:
-        credentials.append("")
-    for attempt, credential in enumerate(credentials):
+        attempts.append(("", "/generate"))
+    # CPU inference is a real model execution endpoint, not a canned answer.
+    # It bypasses the ZeroGPU queue when Render's shared egress identity is denied.
+    attempts.append(("", "/generate_cpu"))
+    for attempt, (credential, api_name) in enumerate(attempts):
         job = None
         last = ""
         try:
             client = _hf_client(settings.hf_space_id, credential)
-            job = client.submit(text, mode, speed, settings.max_new_tokens, api_name="/generate")
+            job = client.submit(text, mode, speed, settings.max_new_tokens, api_name=api_name)
             for snapshot in job:
                 if time.monotonic() - started > settings.ai_timeout_seconds:
                     raise AIUnavailable("AI request exceeded its deadline")
@@ -80,8 +83,8 @@ def _huggingface_stream(text: str, mode: str, speed: str) -> Iterator[str]:
                 attempt + 1,
                 bool(credential),
             )
-            if attempt + 1 < len(credentials):
-                log.info("Retrying public Hugging Face Space without credentials")
+            if attempt + 1 < len(attempts):
+                log.info("Retrying hosted inference using next provider path")
                 continue
             raise AIUnavailable("Hosted AI job finished without a response")
         except AIUnavailable:
