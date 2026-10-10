@@ -1,1 +1,1 @@
-Redeploy PACE Space with Transformers 5 compatible with Gradio 6 Hub requirements. 2026-10-09T12:48Z.
+Deploy CPU fallback endpoint to HF Space to handle ZeroGPU failed requests, 2026-10-10 06:59 UTC.
