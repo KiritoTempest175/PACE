@@ -1,0 +1,42 @@
+name: Verify production hosted PACE prompt
+on:
+  push:
+    branches: [main]
+    paths: [.github/hosted-ai-smoke.request]
+permissions:
+  contents: read
+jobs:
+  hosted-ai:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Generate real answer using deployed Render API and Hugging Face Space
+        run: |
+          python - <<'PY'
+          import json, secrets, time, urllib.request
+          target="https://pace-phase2-api.onrender.com/generate"
+          payload={"text":"Reply with the word SUCCESS and one short sentence.","mode":"coding","speed_mode":"fast"}
+          body=json.dumps(payload).encode()
+          req=urllib.request.Request(target,method="POST",data=body,
+            headers={"Content-Type":"application/json","Origin":"https://pace.huzaifazaman.com",
+            "X-PACE-Session":secrets.token_hex(32),"Accept":"text/event-stream"})
+          started=time.monotonic();events=[];tokens=[]
+          with urllib.request.urlopen(req, timeout=285) as response:
+              print("API HTTP",response.status,flush=True)
+              for line in response:
+                  elapsed=int(time.monotonic()-started)
+                  text=line.decode(errors="replace").strip()
+                  if text.startswith("data:"):
+                      event=json.loads(text[5:])
+                      events.append(event.get("type"))
+                      if event.get("type")=="token":tokens.append(event.get("content",""))
+                      if event.get("type")=="error":raise RuntimeError("API returned error: "+event.get("content","unknown"))
+                      if event.get("type")=="done":break
+                  if elapsed > 270:raise RuntimeError("Generation deadline exceeded")
+          print("Generated token characters",sum(map(len,tokens)),"seconds",round(time.monotonic()-started,1),"events",events[:12],flush=True)
+          if not tokens or not "".join(tokens).strip() or "done" not in events:raise RuntimeError("AI response was incomplete")
+          print("PASS: deployed Render → Hugging Face → streamed answer → completed",flush=True)
+          PY
