@@ -1,0 +1,45 @@
+name: Verify PACE CPU fallback model
+on:
+  push:
+    branches: [phase2/production-hardening-20261009]
+    paths: [.github/pace-cpu-probe.request]
+permissions:
+  contents: read
+jobs:
+  cpu:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install 'gradio-client>=1.5,<3'
+      - name: Verify actual Hugging Face CPU generation
+        run: |
+          python - <<'PY'
+          import time
+          from gradio_client import Client
+          for i in range(12):
+              try:
+                  client=Client("Kiritox07/pace-phase2-ai",verbose=False)
+                  api=client.view_api(print_info=False)
+                  if "/generate_cpu" not in str(api):
+                      raise RuntimeError("Space is not yet serving CPU fallback")
+                  print("CPU endpoint ready",flush=True)
+                  break
+              except Exception as e:
+                  print("Waiting for Space CPU endpoint",i+1,type(e).__name__,flush=True)
+                  if i==11: raise
+                  time.sleep(15)
+          job=client.submit("Reply with the word READY.", "coding", "fast",32,api_name="/generate_cpu")
+          last=""
+          started=time.monotonic()
+          for value in job:
+              if not isinstance(value,str):raise AssertionError("Unexpected output type")
+              last=value
+              if time.monotonic()-started>300:raise RuntimeError("CPU generation too slow")
+          status=job.status()
+          print("CPU job status",status.code,"success",status.success,"chars",len(last),"seconds",int(time.monotonic()-started),flush=True)
+          if not last.strip() or status.success is False:raise RuntimeError("CPU endpoint failed to generate model text")
+          print("PASS: real CPU model generated output without ZeroGPU quota",flush=True)
+          PY
