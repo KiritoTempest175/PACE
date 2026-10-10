@@ -14,7 +14,7 @@ services:
       - key: AI_PROVIDER
         value: huggingface
       - key: CORS_ORIGINS
-        value: https://pace-ensemble.netlify.app
+        value: https://pace.huzaifazaman.com,https://pace-ensemble.netlify.app,http://tauri.localhost,https://tauri.localhost
       - key: DATABASE_URL
         sync: false
       - key: HF_SPACE_ID
