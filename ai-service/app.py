@@ -9,7 +9,7 @@ as prescribed by current ZeroGPU's CUDA-emulation initialization contract.
 from __future__ import annotations
 
 import os
-from threading import Thread
+from threading import Thread, Lock
 from typing import Iterator
 
 import spaces  # Import before torch: ZeroGPU CUDA emulation applies during startup.
@@ -77,6 +77,79 @@ def _model_tokens(text: str, mode: str, budget: int) -> Iterator[str]:
         raise gr.Error("The AI model failed to generate a response") from failures[0]
 
 
+# CPU execution is intentionally separate from the ZeroGPU-decorated function.
+# It supplies real model output if Hugging Face rejects a GPU quota/job.
+_CPU_MODEL = None
+_CPU_LOCK = Lock()
+
+
+def _cpu_model():
+    global _CPU_MODEL
+    with _CPU_LOCK:
+        if _CPU_MODEL is None:
+            model = AutoModelForCausalLM.from_pretrained(MODEL_ID, trust_remote_code=False)
+            _CPU_MODEL = model.to("cpu").eval()
+    return _CPU_MODEL
+
+
+def _cpu_tokens(text: str, mode: str, budget: int) -> Iterator[str]:
+    model = _cpu_model()
+    inputs = TOKENIZER(
+        prompt_for(text, mode), return_tensors="pt", truncation=True, max_length=2048,
+    ).to("cpu")
+    streamer = TextIteratorStreamer(
+        TOKENIZER, skip_prompt=True, skip_special_tokens=True, timeout=45,
+    )
+    failures: list[Exception] = []
+
+    def run_model():
+        try:
+            with torch.inference_mode():
+                model.generate(**inputs, max_new_tokens=min(128, budget),
+                               do_sample=False, pad_token_id=TOKENIZER.eos_token_id,
+                               streamer=streamer)
+        except Exception as exc:
+            failures.append(exc)
+            streamer.on_finalized_text("", stream_end=True)
+
+    thread = Thread(target=run_model, daemon=True)
+    thread.start()
+    try:
+        for piece in streamer:
+            if piece:
+                yield piece
+    finally:
+        thread.join(timeout=2)
+    if failures:
+        raise gr.Error("CPU model failed to generate a response") from failures[0]
+
+
+def generate_cpu(text: str, mode: str, speed: str, max_new_tokens: int) -> Iterator[str]:
+    """Real CPU fallback with no ZeroGPU allocation or user quota dependency."""
+    if mode not in SYSTEM_PROMPTS or speed not in {"fast", "pro"}:
+        raise gr.Error("Unsupported workspace or generation mode")
+    if not isinstance(text, str) or not 1 <= len(text) <= 12000:
+        raise gr.Error("Invalid prompt length")
+    if not isinstance(max_new_tokens, int) or not 16 <= max_new_tokens <= 256:
+        raise gr.Error("Invalid token budget")
+    snapshot = ""
+    for piece in _cpu_tokens(text, mode, max_new_tokens):
+        snapshot += piece
+        if speed == "fast":
+            yield snapshot
+    if not snapshot.strip():
+        raise gr.Error("CPU model returned no response")
+    if speed == "pro":
+        prompt = (
+            "Review this draft for errors and return the corrected answer only. "
+            "Be explicit when uncertain.\\nQUESTION:\\n" + text[:3000]
+            + "\\nDRAFT:\\n" + snapshot[:3000]
+        )
+        revised = "".join(_cpu_tokens(prompt, mode, max_new_tokens)).strip()
+        if not revised:
+            raise gr.Error("CPU review failed")
+        yield revised
+
 def duration_for(text: str, mode: str, speed: str, max_new_tokens: int) -> int:
     # Sized conservatively for a 0.5B model; benchmark representative requests
     # and tune for the actual Space hardware/visitor GPU quota.
@@ -124,6 +197,14 @@ with gr.Blocks(title="PACE AI Service") as demo:
         generate, [prompt, mode, speed, budget], response,
         api_name="generate", concurrency_limit=1,
     )
+
+    with gr.Accordion("CPU fallback (for ZeroGPU quota limits)", open=False):
+        gr.Markdown("Uses the same pretrained model on CPU; slower, not a fake response.")
+        cpu_output = gr.Textbox(label="CPU model response", lines=10)
+        gr.Button("Generate on CPU").click(
+            generate_cpu, [prompt, mode, speed, budget], cpu_output,
+            api_name="generate_cpu", concurrency_limit=1,
+        )
 
 demo.queue(max_size=12, default_concurrency_limit=1)
 if __name__ == "__main__":
