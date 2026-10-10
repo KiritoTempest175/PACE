@@ -1,1 +1,1 @@
-Verify real hosted inference with public Gradio fallback on Render deployment dep-db4u3c59fdbs73ats1kg, 2026-10-10 06:58.
+Verify production Render generates real SSE answer via CPU fallback after ZeroGPU restriction; dep-db4u7kh42hec73f1d1u0.
