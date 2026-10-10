@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file='.env', env_file_encoding='utf-8', extra='ignore')
     environment: Literal['development', 'production', 'test'] = 'development'
     database_url: str = 'sqlite:///./backend/pace.db'
-    cors_origins: str = 'https://pace-ensemble.netlify.app'
+    cors_origins: str = 'https://pace.huzaifazaman.com,https://pace-ensemble.netlify.app,http://tauri.localhost,https://tauri.localhost'
     max_upload_bytes: int = Field(default=8 * 1024 * 1024, ge=1024, le=50 * 1024 * 1024)
     max_pdf_pages: int = Field(default=80, ge=1, le=300)
     max_pdf_text_chars: int = Field(default=100_000, ge=1000, le=500_000)
