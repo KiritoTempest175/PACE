@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     ollama_model: str = 'qwen2.5-coder:1.5b'
     hf_space_id: str = ''
     hf_token: str = ''
-    ai_timeout_seconds: int = Field(default=90, ge=5, le=300)
+    ai_timeout_seconds: int = Field(default=240, ge=5, le=300)
     max_new_tokens: int = Field(default=256, ge=16, le=1024)
     sandbox_enabled: bool = False
     sandbox_image: str = 'pace-sandbox:local'
