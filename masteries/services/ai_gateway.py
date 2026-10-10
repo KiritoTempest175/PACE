@@ -91,7 +91,7 @@ def _huggingface_stream(text: str, mode: str, speed: str) -> Iterator[str]:
             raise
         except Exception as exc:
             log.warning("Hosted AI client failed (class=%s, authenticated=%s)", type(exc).__name__, bool(credential))
-            if attempt + 1 < len(credentials) and not last:
+            if attempt + 1 < len(attempts) and not last:
                 continue
             raise AIUnavailable("AI service unavailable or quota exhausted") from exc
         finally:
