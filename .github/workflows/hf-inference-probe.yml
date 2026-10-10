@@ -1,0 +1,38 @@
+name: Diagnose Hosted PACE Inference
+on:
+  push:
+    branches: [main]
+    paths: [.github/hf-inference-probe.request]
+permissions:
+  contents: read
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install same Gradio Client as Render
+        run: pip install 'gradio-client>=1.5,<3'
+      - name: Probe Hugging Face stream and print only non-sensitive error categories
+        env:
+          HF_SPACE: Kiritox07/pace-phase2-ai
+        run: |
+          python - <<'PY'
+          import os, time, traceback
+          from gradio_client import Client
+          client=Client(os.environ['HF_SPACE'], verbose=False)
+          print('Discovered API',str(client.view_api(print_info=False))[:1500],flush=True)
+          for mode in ['fast','pro']:
+              try:
+                  t=time.time()
+                  job=client.submit('Say hello in one sentence.', 'coding',mode,64,api_name='/generate')
+                  for i,x in enumerate(job):
+                      print('SNAPSHOT',mode,i,type(x).__name__,repr(x)[:500],flush=True)
+                      if i>12: break
+                  print('RESULT',mode,'done',job.done(),'seconds',int(time.time()-t),flush=True)
+              except Exception as exc:
+                  print('FAILURE',mode,type(exc).__name__,str(exc)[:2000],flush=True)
+                  traceback.print_exc(limit=3)
+          PY
