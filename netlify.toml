@@ -5,6 +5,12 @@
   environment = { VITE_API_BASE_URL = "https://pace-phase2-api.onrender.com" }
 
 [[redirects]]
+  from = "https://pace-ensemble.netlify.app/*"
+  to = "https://pace.huzaifazaman.com/:splat"
+  status = 301
+  force = true
+
+[[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
