@@ -45,54 +45,58 @@ def _hf_client(space_id: str, token: str):
 
 def _huggingface_stream(text: str, mode: str, speed: str) -> Iterator[str]:
     settings = get_settings()
-    job = None
     started = time.monotonic()
-    last = ""
-    try:
-        client = _hf_client(settings.hf_space_id, settings.hf_token)
-        job = client.submit(text, mode, speed, settings.max_new_tokens, api_name="/generate")
-        # Gradio's generator Job iterator yields increasing complete snapshots.
-        for snapshot in job:
-            if time.monotonic() - started > settings.ai_timeout_seconds:
-                raise AIUnavailable("AI request exceeded its deadline")
-            if not isinstance(snapshot, str):
-                raise AIUnavailable("Invalid AI service output")
-            if len(snapshot) > 100_000:
-                raise AIUnavailable("AI output exceeded the safety limit")
-            if not snapshot.startswith(last):
-                raise AIUnavailable("AI service stream was not append-only")
-            delta = snapshot[len(last):]
-            if delta:
-                yield delta
-            last = snapshot
-        if not last.strip():
+    # The Space is public. Some HF ZeroGPU identities have separate quotas.
+    # Retry anonymously only if an authenticated job failed before any output.
+    credentials = [settings.hf_token]
+    if settings.hf_token:
+        credentials.append("")
+    for attempt, credential in enumerate(credentials):
+        job = None
+        last = ""
+        try:
+            client = _hf_client(settings.hf_space_id, credential)
+            job = client.submit(text, mode, speed, settings.max_new_tokens, api_name="/generate")
+            for snapshot in job:
+                if time.monotonic() - started > settings.ai_timeout_seconds:
+                    raise AIUnavailable("AI request exceeded its deadline")
+                if not isinstance(snapshot, str):
+                    raise AIUnavailable("Invalid AI service output")
+                if len(snapshot) > 100_000:
+                    raise AIUnavailable("AI output exceeded the safety limit")
+                if not snapshot.startswith(last):
+                    raise AIUnavailable("AI service stream was not append-only")
+                delta = snapshot[len(last):]
+                if delta:
+                    yield delta
+                last = snapshot
+            if last.strip():
+                return
             status = job.status()
-            job_error = None
-            if job.done():
-                try:
-                    job_error = job.exception(timeout=0)
-                except Exception:
-                    pass
             log.warning(
-                "Hugging Face completed without tokens (status=%s, success=%s, exception_type=%s, detail=%s)",
+                "Hosted AI returned no tokens (status=%s, success=%s, attempt=%s, authenticated=%s)",
                 getattr(status, "code", None),
                 getattr(status, "success", None),
-                type(job_error).__name__ if job_error else None,
-                str(job_error)[:200] if job_error else None,
+                attempt + 1,
+                bool(credential),
             )
-            raise AIUnavailable("AI service returned no content")
-    except AIUnavailable as exc:
-        log.warning("Hugging Face response rejected: %s", str(exc))
-        raise
-    except Exception as exc:
-        log.warning("Remote inference failed (%s)", type(exc).__name__)
-        raise AIUnavailable("AI service unavailable or quota exhausted") from exc
-    finally:
-        if job is not None and not job.done():
-            try:
-                job.cancel()
-            except Exception:
-                pass
+            if attempt + 1 < len(credentials):
+                log.info("Retrying public Hugging Face Space without credentials")
+                continue
+            raise AIUnavailable("Hosted AI job finished without a response")
+        except AIUnavailable:
+            raise
+        except Exception as exc:
+            log.warning("Hosted AI client failed (class=%s, authenticated=%s)", type(exc).__name__, bool(credential))
+            if attempt + 1 < len(credentials) and not last:
+                continue
+            raise AIUnavailable("AI service unavailable or quota exhausted") from exc
+        finally:
+            if job is not None and not job.done():
+                try:
+                    job.cancel()
+                except Exception:
+                    pass
 
 
 def stream_generate(text: str, mode: str, speed: str) -> Iterator[str]:
