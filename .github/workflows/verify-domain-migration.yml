@@ -1,0 +1,46 @@
+name: Verify PACE domain migration
+on:
+  push:
+    branches: [main]
+    paths: [.github/domain-migration-test.request]
+permissions:
+  contents: read
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 14
+    steps:
+      - name: Wait for Render and Netlify deployments and verify both domains
+        shell: bash
+        run: |
+          set -euo pipefail
+          new_origin='https://pace.huzaifazaman.com'
+          old_origin='https://pace-ensemble.netlify.app'
+          api='https://pace-phase2-api.onrender.com'
+          for attempt in {1..40}; do
+            headers=$(mktemp)
+            status=$(curl -k -sS -o /dev/null -D "$headers" --max-time 25 -w '%{http_code}' -X OPTIONS \
+              "$api/generate" \
+              -H "Origin: $new_origin" \
+              -H "Access-Control-Request-Method: POST" \
+              -H "Access-Control-Request-Headers: content-type,x-pace-session" || true)
+            allowed=$(grep -i '^access-control-allow-origin:' "$headers" | tr -d '\r' | tail -1 || true)
+            echo "CORS attempt $attempt HTTP $status $allowed"
+            if [ "$status" = 200 ] && [ "$allowed" = "access-control-allow-origin: $new_origin" ]; then
+              break
+            fi
+            if [ "$attempt" = 40 ]; then echo "::error::Render new-domain CORS preflight was not ready"; exit 1; fi
+            sleep 12
+          done
+          for attempt in {1..40}; do
+            headers=$(mktemp)
+            status=$(curl -sS --max-time 20 -o /dev/null -D "$headers" -w '%{http_code}' "$old_origin/coding?from=old" || true)
+            location=$(grep -i '^location:' "$headers" | tr -d '\r' | tail -1 || true)
+            echo "Redirect attempt $attempt HTTP $status $location"
+            if [ "$status" = "301" ] && [[ "$location" == *"pace.huzaifazaman.com/coding"* ]]; then
+              break
+            fi
+            if [ "$attempt" = 40 ]; then echo "::error::Old hostname did not redirect permanently to custom domain"; exit 1; fi
+            sleep 12
+          done
+          echo 'SUCCESS: custom-domain API CORS and permanent hostname redirect both verified'
