@@ -1,1 +1,1 @@
-Verify CPU model inference on HF Space after deployment, 2026-10-10.
+Test CPU model endpoint using Gradio endpoint registry after Space restart, 2026-10-10.
