@@ -21,5 +21,7 @@ services:
         sync: false
       - key: HF_TOKEN
         sync: false
+      - key: AI_TIMEOUT_SECONDS
+        value: '240'
       - key: SANDBOX_ENABLED
         value: 'false'
