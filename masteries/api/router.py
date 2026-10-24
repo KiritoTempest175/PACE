@@ -200,7 +200,7 @@ async def generate_stream(req: PredictRequest, owner: str = Depends(owner_for_se
                     try:
                         await asyncio.wait_for(asyncio.shield(task), timeout=min(10, remaining))
                     except asyncio.TimeoutError:
-                        yield ": keep-alive\\n\\n"
+                        yield ": keep-alive\n\n"
                         remaining = get_settings().ai_timeout_seconds - (time.monotonic() - started)
                         if remaining <= 0:
                             raise AIUnavailable("Generation exceeded its deadline")
