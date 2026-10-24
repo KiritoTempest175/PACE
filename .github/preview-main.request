@@ -1,0 +1,3 @@
+Preview deploy of main after fixing a React runtime crash caused by the PDF document state shadowing window.document.
+Only Netlify deploy preview, never --prod.
+2026-10-24
