@@ -186,6 +186,7 @@ async def generate_stream(req: PredictRequest, owner: str = Depends(owner_for_se
 
     async def stream():
         parts: list[str] = []
+        review_announced = False
         iterator = stream_generate(prompt, req.mode, req.speed_mode)
         started = time.monotonic()
         yield frame({"type": "init", "conversation_id": cid, "source": source, "stage": "actor", "version": req.speed_mode})
@@ -207,6 +208,9 @@ async def generate_stream(req: PredictRequest, owner: str = Depends(owner_for_se
                 if not has_value:
                     break
                 if chunk:
+                    if req.speed_mode == 'pro' and not review_announced:
+                        yield frame({'type': 'stage', 'stage': 'critic'})
+                        review_announced = True
                     parts.append(chunk)
                     if sum(map(len, parts)) > get_settings().max_stream_output_chars:
                         raise AIUnavailable("Response exceeded maximum length")
