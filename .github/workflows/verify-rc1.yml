@@ -1,0 +1,41 @@
+name: Verify PACE RC1 published release assets
+on:
+  workflow_dispatch:
+  push:
+    branches: [feature/tauri-desktop]
+    paths:
+      - .github/workflows/verify-rc1.yml
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Verify pre-release flags and stable latest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          REPO="$GITHUB_REPOSITORY"
+          TAG=v0.1.0-rc1
+          test "$(gh api "repos/$REPO/releases/tags/$TAG" --jq '.prerelease')" = "true"
+          test "$(gh api "repos/$REPO/releases/tags/$TAG" --jq '.draft')" = "false"
+          test "$(gh api "repos/$REPO/releases/latest" --jq '.tag_name')" != "$TAG"
+      - name: Download all published assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p verify-assets
+          gh release download v0.1.0-rc1 --repo "$GITHUB_REPOSITORY" --dir verify-assets
+      - name: Verify SHA256 and asset matrix
+        run: |
+          set -euo pipefail
+          cd verify-assets
+          test -f PACE_0.1.0_x64-setup.exe
+          test -f PACE_0.1.0_aarch64.dmg
+          test -f PACE_0.1.0_amd64.AppImage
+          test -f PACE_0.1.0_amd64.deb
+          test -f PACE_Web_Test_dist.zip
+          test -f SHA256SUMS.txt
+          sha256sum --check SHA256SUMS.txt
