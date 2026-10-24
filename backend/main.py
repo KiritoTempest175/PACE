@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from core.config import get_settings
 from masteries.api.router import router
-from masteries.services.database import init_db
+from masteries.services.database import init_db, purge_expired_data
 from backend.request_limits import RequestBodyLimit
 
 settings=get_settings()
@@ -20,6 +20,7 @@ logger=logging.getLogger('pace.api')
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    purge_expired_data(settings.data_retention_days)
     yield
 
 app=FastAPI(title='PACE API',version='2.0.0',lifespan=lifespan)
