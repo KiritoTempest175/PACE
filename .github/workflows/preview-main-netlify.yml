@@ -1,0 +1,60 @@
+name: PACE Main Web Preview (never production)
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/preview-main.request
+      - .github/workflows/preview-main-netlify.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: pace-main-preview
+  cancel-in-progress: false
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    environment: NETLIFY
+    timeout-minutes: 35
+    env:
+      NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+      NETLIFY_SITE_ID: ba128faa-c6da-43f7-9fcc-4d51db32e87c
+      VITE_API_BASE_URL: https://pace-phase2-api.onrender.com
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Verify Netlify preview credential
+        run: |
+          if [ -z "$NETLIFY_AUTH_TOKEN" ]; then
+            echo "::error::NETLIFY_AUTH_TOKEN is missing from GitHub secrets or NETLIFY environment."
+            exit 1
+          fi
+      - name: Build, lint and test
+        working-directory: frontend
+        run: |
+          npm ci --no-audit --no-fund
+          npm run lint
+          npm test
+          npm run check:links
+          npm run build
+      - name: Publish immutable Netlify preview URL only
+        run: |
+          npm install -g netlify-cli@23
+          netlify deploy --dir=frontend/dist --message="PACE main black-page fix preview (no production deploy)" --json > preview.json
+          node -e 'const x=require("./preview.json"); if(!x.deploy_url)process.exit(1); console.log("PREVIEW_URL="+x.deploy_url); console.log("BUILD_API="+process.env.VITE_API_BASE_URL);'
+          printf 'Netlify preview, not production. The configured backend is %s (hosted shared API/data).\n' "$VITE_API_BASE_URL" >> "$GITHUB_STEP_SUMMARY"
+          node -e 'const x=require("./preview.json");require("fs").appendFileSync(process.env.GITHUB_STEP_SUMMARY,"Preview URL: "+x.deploy_url+"\n")'
+      - name: Keep public preview deployment metadata
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pace-main-preview-metadata
+          path: preview.json
+          if-no-files-found: ignore
+          retention-days: 14
