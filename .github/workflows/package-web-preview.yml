@@ -1,0 +1,61 @@
+name: Package fixed PACE web preview (no production deploy)
+on:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/package-web-preview.yml
+      - .github/package-web-preview.request
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: pace-web-preview-zip
+  cancel-in-progress: false
+jobs:
+  web-preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Test and build preview for hosted backend
+        working-directory: frontend
+        env:
+          VITE_API_BASE_URL: https://pace-phase2-api.onrender.com
+        run: |
+          npm ci --no-audit --no-fund
+          npm run lint
+          npm test
+          npm run check:links
+          npm run build
+          test -f dist/index.html
+          test -f dist/_redirects
+      - name: Zip ONLY static dist files
+        run: |
+          (cd frontend/dist && zip -qr "$GITHUB_WORKSPACE/PACE_Web_Netlify_Preview.zip" .)
+          unzip -l PACE_Web_Netlify_Preview.zip | grep index.html
+          sha256sum PACE_Web_Netlify_Preview.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pace-fixed-netlify-preview
+          path: PACE_Web_Netlify_Preview.zip
+          if-no-files-found: error
+          retention-days: 30
+      - name: Attach preview ZIP to RC1 prerelease for easy download
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release upload v0.1.0-rc1 --repo "$GITHUB_REPOSITORY" PACE_Web_Netlify_Preview.zip --clobber
+          gh release view v0.1.0-rc1 --repo "$GITHUB_REPOSITORY" --json isPrerelease,assets --jq '{isPrerelease,preview_assets:[.assets[].name]}'
+      - name: Web preview handoff
+        run: |
+          echo "### Fixed PACE web preview ZIP" >> "$GITHUB_STEP_SUMMARY"
+          echo "Download PACE_Web_Netlify_Preview.zip from https://github.com/$GITHUB_REPOSITORY/releases/tag/v0.1.0-rc1" >> "$GITHUB_STEP_SUMMARY"
+          echo "Unzip and drag the folder with index.html onto https://app.netlify.com/drop as a NEW site. This build points at https://pace-phase2-api.onrender.com (hosted, not isolated data)." >> "$GITHUB_STEP_SUMMARY"
