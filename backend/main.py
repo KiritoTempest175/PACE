@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from core.config import get_settings
 from masteries.api.router import router
-from masteries.services.database import init_db, purge_expired_data
+from masteries.services.database import init_db, purge_expired_data, purge_expired_data
 from backend.request_limits import RequestBodyLimit
 
 settings=get_settings()
