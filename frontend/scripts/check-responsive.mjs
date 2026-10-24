@@ -32,6 +32,7 @@ try{
    await page.screenshot({path:path.join('artifacts/responsive',filename),fullPage:true});
   }
   await page.goto(origin+'/',{waitUntil:'domcontentloaded'});
+  await page.locator('#root > *').first().waitFor({state:'attached',timeout:12000});
   if(width<=700){
    const open=page.getByRole('button',{name:'Open navigation'});
    await open.click();
