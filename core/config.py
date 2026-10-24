@@ -25,6 +25,10 @@ class Settings(BaseSettings):
     max_prompt_tokens_estimate: int = Field(default=12000, ge=256, le=128000)
     max_stream_output_chars: int = Field(default=1_000_000, ge=100000, le=5_000_000)
     max_continuation_rounds: int = Field(default=3, ge=0, le=8)
+    data_retention_days: int = Field(default=30, ge=1, le=3650)
+    max_prompt_tokens_estimate: int = Field(default=12000, ge=256, le=128000)
+    max_stream_output_chars: int = Field(default=1_000_000, ge=100000, le=5_000_000)
+    max_continuation_rounds: int = Field(default=3, ge=0, le=8)
     sandbox_enabled: bool = False
     sandbox_image: str = 'pace-sandbox:local'
     tokenizer_backend: Literal['python', 'rust'] = 'python'
