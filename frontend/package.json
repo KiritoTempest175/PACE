@@ -11,7 +11,9 @@
     "test": "vitest run",
     "format": "prettier --write src",
     "prebuild": "node scripts/vendor-pyodide.mjs",
-    "predev": "node scripts/vendor-pyodide.mjs"
+    "predev": "node scripts/vendor-pyodide.mjs",
+    "check:links": "node scripts/check-links.mjs",
+    "test:responsive": "node scripts/check-responsive.mjs"
   },
   "dependencies": {
     "lucide-react": "^0.468.0",
