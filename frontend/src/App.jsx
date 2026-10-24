@@ -6,7 +6,8 @@ import {InfoPage,Footer,BrandLogo} from './components/InfoPages.jsx';
 import CodeResponse from './components/CodeResponse.jsx';
 import ModelsPage from './components/ModelsPage.jsx';
 import {directGenerate} from './lib/directProvider.js';
-import {IS_PACE_DESKTOP,desktopConnectionKind} from './lib/desktopApi.js';
+const IS_PACE_DESKTOP=false;
+const desktopConnectionKind=()=> 'hosted';
 import {useTheme} from './ThemeContext.jsx';
 import {json,wakeServer,streamAnswer} from './lib/api.js';
 
