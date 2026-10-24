@@ -58,7 +58,7 @@ def _huggingface_stream(text: str, mode: str, speed: str) -> Iterator[str]:
                 raise AIUnavailable("AI request exceeded its deadline")
             if not isinstance(snapshot, str):
                 raise AIUnavailable("Invalid AI service output")
-            if len(snapshot) > 100_000:
+            if len(snapshot) > settings.max_stream_output_chars:
                 raise AIUnavailable("AI output exceeded the safety limit")
             if not snapshot.startswith(last):
                 raise AIUnavailable("AI service stream was not append-only")
