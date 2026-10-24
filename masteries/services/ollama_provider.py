@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 from typing import Iterator
 from urllib.parse import urlsplit
 
@@ -11,7 +12,18 @@ from core.config import get_settings
 from masteries.services.ai_gateway import AIUnavailable
 
 
-def _request(prompt: str, mode: str) -> Iterator[str]:
+def desktop_role_model(role: str) -> str | None:
+    """Use selected local model from desktop settings."""
+    if not os.environ.get("PACE_DESKTOP_DATA_DIR"):
+        return None
+    from desktop.model_manager import read_selection
+    model = read_selection().get(role)
+    if not model:
+        raise AIUnavailable(f"Download and select a {role} model in PACE Desktop setup")
+    return model
+
+
+def _request(prompt: str, mode: str, role: str = "actor") -> Iterator[str]:
     settings = get_settings()
     url = urlsplit(settings.ollama_base_url)
     if url.scheme not in ("http", "https") or not url.hostname or url.username or url.password:
@@ -21,7 +33,7 @@ def _request(prompt: str, mode: str) -> Iterator[str]:
         "literacy": "Answer only from supplied excerpts; state when evidence is insufficient.",
     }[mode]
     payload = {
-        "model": settings.ollama_model,
+        "model": desktop_role_model(role) or settings.ollama_model,
         "messages": [{"role": "system", "content": system}, {"role": "user", "content": prompt}],
         "stream": True,
         "options": {"num_predict": settings.max_new_tokens},
@@ -62,13 +74,13 @@ def _overlap(previous: str, continuation: str) -> int:
     return 0
 
 
-def _complete(prompt: str, mode: str) -> Iterator[str]:
+def _complete(prompt: str, mode: str, role: str = "actor") -> Iterator[str]:
     settings = get_settings()
     full = ""
     for attempt in range(settings.max_continuation_rounds + 1):
         # Keep the first pass streaming. Buffer subsequent rounds to dedupe boundaries.
         pieces = []
-        iterator = _request(prompt, mode)
+        iterator = _request(prompt, mode, role)
         while True:
             try:
                 chunk = next(iterator)
@@ -101,9 +113,9 @@ def _complete(prompt: str, mode: str) -> Iterator[str]:
 
 def stream_ollama(text: str, mode: str, speed: str) -> Iterator[str]:
     if speed == "fast":
-        yield from _complete(text, mode)
+        yield from _complete(text, mode, 'actor')
         return
-    draft = "".join(_complete(text, mode)).strip()
+    draft = "".join(_complete(text, mode, "actor")).strip()
     if not draft:
         raise AIUnavailable("Local actor output is empty")
     review = (
@@ -113,4 +125,4 @@ def stream_ollama(text: str, mode: str, speed: str) -> Iterator[str]:
     )
     if (len(review) + 2) // 3 > get_settings().max_prompt_tokens_estimate:
         raise AIUnavailable("Pro review exceeds the model context budget; shorten the prompt")
-    yield from _complete(review, mode)
+    yield from _complete(review, mode, 'critic')
