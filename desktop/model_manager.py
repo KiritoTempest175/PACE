@@ -46,7 +46,7 @@ def read_selection() -> dict[str, str | None]:
         data = json.loads(_selection_file().read_text(encoding="utf-8"))
         if isinstance(data, dict):
             for role in chosen:
-                if isinstance(data.get(role), str) and re.fullmatch(r"[\\w][\\w.\\-/:]{0,159}", data[role]):
+                if isinstance(data.get(role), str) and re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9_.:/-]{0,159}", data[role]):
                     chosen[role] = data[role]
     except (FileNotFoundError, ValueError, OSError, TypeError):
         pass
@@ -109,7 +109,7 @@ class ModelSelection(BaseModel):
 def _validate(req: ModelSelection, allow_installed: bool = False) -> None:
     allowed_model = req.model in ALLOWED or (
         allow_installed and isinstance(req.model, str) and
-        re.fullmatch(r"[\\w][\\w.\\-/:]{0,159}", req.model) and
+        re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9_.:/-]{0,159}", req.model) and
         req.model in installed_models()
     )
     if req.role not in ("actor","critic") or not allowed_model:
