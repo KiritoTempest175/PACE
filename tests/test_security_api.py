@@ -132,3 +132,32 @@ def test_sandbox_has_non_network_privileges(monkeypatch):
         assert '--read-only' in argv and '--cap-drop' in argv
         assert '--memory' in argv and '--cpus' in argv and '--pids-limit' in argv
     finally: cfg.sandbox_enabled=original
+
+def test_delete_my_data_is_session_scoped(client):
+    a = client.post('/conversations', headers=ALICE, json={'title':'Erase me','workspace':'coding'}).json()
+    b = client.post('/conversations', headers=BOB, json={'title':'Keep me','workspace':'coding'}).json()
+    erased = client.delete('/my-data', headers=ALICE)
+    assert erased.status_code == 200
+    assert erased.json()['status'] == 'deleted'
+    assert client.get('/conversations/' + a['id'], headers=ALICE).status_code == 404
+    assert client.get('/conversations/' + b['id'], headers=BOB).status_code == 200
+
+@pytest.mark.parametrize('mode', ['coding', 'literacy'])
+@pytest.mark.parametrize('speed', ['fast', 'pro'])
+def test_long_prompt_rejected_explicitly(client, monkeypatch, mode, speed):
+    from core.config import get_settings
+    from masteries.services import ai_gateway
+    monkeypatch.setattr(ai_gateway, 'ensure_provider_configured', lambda: None)
+    settings = get_settings()
+    original = settings.max_prompt_tokens_estimate
+    try:
+        settings.max_prompt_tokens_estimate = 256
+        r = client.post('/generate', headers=ALICE,
+            json={'mode': mode, 'speed_mode': speed, 'text': 'x' * 4096})
+        assert r.status_code in (413, 422)
+    finally:
+        settings.max_prompt_tokens_estimate = original
+
+def test_input_contract_accepts_more_than_6000_characters():
+    from masteries.api.schemas import PredictRequest
+    assert len(PredictRequest(text='a' * 7000).text) == 7000
