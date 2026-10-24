@@ -1,154 +1,101 @@
 # PACE — Pipelined Actor-Critic Ensemble
 
-PACE is a work-in-progress AI productivity workspace for coding, PDF literacy and research exploration. Its React/Vite frontend communicates with a FastAPI application that stores anonymous-session conversations and extracted PDF text in SQLite (local) or hosted PostgreSQL. Inference is provided through **one of three explicit modes**, selected via configuration.
+![PACE logo](frontend/public/favicon.svg)
+[![CI](https://github.com/KiritoTempest175/PACE/actions/workflows/ci.yml/badge.svg)](https://github.com/KiritoTempest175/PACE/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-The hosted Hugging Face service uses a **single pretrained instruction model**, not the original independently trained actor-critic models. The `local` provider uses the original Python actor and critic classes and only describes an answer as independently reviewed if both models actually execute. `ollama` is a local single-model option with an optional second-pass review. No published quality metric or factual verification is claimed.
+**PACE is an open-source coding and PDF-literacy AI workspace with transparent Fast and Pro inference, a React dashboard, and optional local desktop models.**
+
+[Web app](https://pace.huzaifazaman.com) · [Documentation](docs/RELEASE_GUIDE.md) · [Security](SECURITY.md) · [Privacy](docs/RELEASE_GUIDE.md#privacy-and-retention)
 
 ## Features and limitations
 
-| Feature | Implementation status |
-|---|---|
-| Coding workspace | Real provider inference; optional restricted Docker Python exercise runner on local development only |
-| PDF literacy | Strict upload validation, extracted-text persistence, bounded keyword excerpts, conversation/document association; not semantic RAG |
-| Research workspace | Real model-generated exploratory responses, **without** verified source retrieval or citations |
-| Actor / critic | Original local actors/critics callable in `AI_PROVIDER=local` and Review mode; not benchmarked in this patch |
-| Hugging Face ZeroGPU | Gradio generator and single pretrained model; Review uses the **same** model twice; quota and hardware restrictions apply |
-| Ollama | Local HTTP streaming from configured model; Review uses the same model twice |
-| Persistence | SQLite locally; PostgreSQL via Neon (or equivalent) on Render; anonymous bearer session, **not accounts** |
-| Realtime telemetry | API-host CPU/RAM/GPU measurements if available; not ZeroGPU telemetry or browser GPU |
-| Rust tokenizer | No working Rust PyO3 extension found in the inspected upstream tree; configurable approximate Python fallback; model tokenizer used for actual inference |
-| Security | UUID PDF paths, parsed PDFs, page/text limits, request-body ceiling, limited CORS, rate limits, safe errors, session-owned reads, opt-in isolated execution |
-| Full production verification | **Not complete.** Requires integration/deployment tests and authorization to deploy services. |
+| Feature | Actual behavior |
+| --- | --- |
+| Coding | Configured model inference; code-fence copy, wrap and download; Pyodide worker runner |
+| Literacy | Validated PDF upload and excerpt-based document questions |
+| Fast | One generation pass; Ollama can auto-continue bounded length finishes |
+| Pro | Draft and second review pass where implemented; hosted model can reuse the same weights |
+| Custom providers | OpenAI-compatible, OpenRouter, Anthropic and Google direct browser connections; provider CORS restrictions apply |
+| Credentials | Browser keys kept in memory, not transmitted to the PACE backend; desktop keyring implementation needs native verification |
+| Models | Ollama is the supported local runner; discovered GGUF/safetensors files are not proof of runnable direct loading |
+| History | Backend database stores session-scoped conversations, messages and extracted PDF text |
+| Long outputs | Explicit context/output bounds and errors; no guarantee of infinite-length results or resumable SSE replay |
 
 ## Architecture
 
 ```mermaid
-flowchart LR
-    Client[React / Netlify] -->|HTTPS, session header| Api[FastAPI / Render]
-    Api -->|SQLAlchemy| Neon[(Hosted PostgreSQL)]
-    Api -->|Gradio client with server-side token| HF[HF Gradio ZeroGPU]
-    Local[Local React] --> ApiLocal[Local FastAPI]
-    ApiLocal --> Sqlite[(SQLite)]
-    ApiLocal -->|configured| Ollama[Local Ollama]
-    ApiLocal -->|configured| Models[Original local actor and critic]
-    ApiLocal -.->|disabled by default| Sandboxed[Local Docker sandbox]
+flowchart TD
+  Web[React Vite / Netlify] --> API[FastAPI / Render]
+  Web -->|optional direct key & prompt| Provider[User's chosen API provider]
+  API --> DB[(SQLite or PostgreSQL)]
+  API --> PDFs[PDF extractor]
+  API --> AI[HF / Ollama / local Actor-Critic]
+  AI -.-> Tokens[Model/Python tokenizer]
+  Desktop[Tauri + bundled local FastAPI] --> Ollama[Ollama local runtime]
+  Desktop --> LocalDB[(Local SQLite)]
 ```
 
-## Repository layout
+## Quick start: web and API
 
-- `frontend/`: accessible workspace UI and reusable controls, Vite build and tests.
-- `backend/`: FastAPI entrypoint, request-body protection, deployment dependencies.
-- `masteries/api/`: validated HTTP contracts and per-session endpoints.
-- `masteries/services/`: real model provider adapters, PDF ingestion, persistence, tokenizer fallback and context retrieval.
-- `masteries/*/training/`: upstream local actor/critic classes, retained in the original repository.
-- `masteries/*/inference/`: compatibility generator entrypoints; no fabricated answers.
-- `core/`: configuration and sandbox.
-- `ai-service/`: separately deployable Hugging Face Gradio Space.
-- `docs/`: design, audit mapping, file changes, platform deployment instructions.
-
-## Local setup
-
-Python 3.10+ for FastAPI, Node 20+ for the React frontend; use Python 3.10.13 or 3.12.12 as supported by the selected ZeroGPU runtime in your Space. Do not commit local `.env` files.
+Requires Python 3.10+, Node.js 20+, and optionally Ollama for local generation.
 
 ```bash
 cp .env.example .env
 python -m venv .venv
-# Activate the virtual environment for your operating system.
 pip install -r backend/requirements.txt
 uvicorn backend.main:app --reload --port 8000
 ```
 
-In a separate terminal:
+In another terminal:
 
 ```bash
 cd frontend
-npm install
+npm ci
 npm run dev
 ```
 
-With `AI_PROVIDER=disabled` CRUD and PDF features work, but the model correctly returns an unavailable error. For actual local inference choose `AI_PROVIDER=ollama` and install/run the model referenced by `OLLAMA_MODEL`. For original actor/critic models choose `AI_PROVIDER=local` and install `requirements-local-ai.txt` together with a suitable PyTorch CPU/CUDA build. A local GPU with 8 GB VRAM may **not** run all original model variants simultaneously; choose smaller variants or sequential loading and benchmark independently.
+For actual inference configure `AI_PROVIDER=ollama` and an installed `OLLAMA_MODEL`, or `AI_PROVIDER=huggingface` with a verified `HF_SPACE_ID`. Disabled providers do not synthesize placeholder responses.
 
-For Compose run `docker compose up --build` with `.env` present. SQLite is stored in a persistent **local Docker volume**. Hosted Render must use a hosted database.
+## Desktop build
 
-### Optional local sandbox
+Checkout `feature/tauri-desktop`. PACE Desktop packages a loopback FastAPI sidecar, SQLite and a Tauri UI. The `.github/workflows/desktop-native-ci.yml` workflow attempts **unsigned** native bundles for Windows, macOS and Linux and publishes build artifacts only, never a production release. Actual results and on-device checks must be verified before distributing installers.
 
-Execution is disabled by default and always disabled in production mode. For local trusted environments build the sandbox image, then set `ENVIRONMENT=development` and `SANDBOX_ENABLED=true` before running the FastAPI process on a machine with a Docker daemon.
+## Configuration and testing
 
-```bash
-docker build -f infra/docker/Dockerfile.sandbox -t pace-sandbox:local .
-```
-
-The runner has no network, no host mounts, drops capabilities, uses a read-only filesystem, unprivileged UID and CPU/memory/PID/time limits. The AST import filter is **not** a separate security boundary. Do not expose a Docker socket or local sandbox to an untrusted public service.
-
-## API contract
-
-| Endpoint | Behavior |
-|---|---|
-| `GET /health` | API process health and model configuration, not proof a remote model works |
-| `GET /telemetry` | Current API-host performance counters |
-| `GET/POST /conversations` | Session-scoped history |
-| `GET/DELETE /conversations/{id}` | Session-scoped reads/deletes |
-| `POST /upload` | PDF-only text ingestion, generated document ID, uploaded binary deleted |
-| `DELETE /documents/{id}` | Deletes only a document owned by the caller's session |
-| `POST /predict` | Complete result or explicit 503 on failure |
-| `POST /generate` | Streaming SSE `init`, `token`, `done` OR `error` frames. After headers, failure uses an error event rather than 503. |
-| `POST /sandbox/run` | Local-only isolated runner, opt-in; otherwise 503 |
-
-All endpoints except `/` and `/health` require a client-generated random `X-PACE-Session` bearer token. Tokens allow access to their matching records; they do **not** establish a user identity. Treat them as secrets and avoid uploading sensitive documents before full authentication, data retention, privacy and backups are implemented.
-
-## Tests
+See [environment example](.env.example), [release architecture/FAQ](docs/RELEASE_GUIDE.md) and [deploy guide](docs/DEPLOYMENT.md). The default retention period is 30 days, pruned at API startup. `DELETE /my-data` erases the current session's database records, not backups or third-party copies.
 
 ```bash
 pip install -r requirements-dev.txt
 pytest -q tests
-python -m compileall -q backend core masteries ai-service
-cd frontend && npm install && npm run lint && npm test && npm run build
+cd frontend
+npm ci
+npm run lint
+npm test
+npm run build
 ```
 
-**Reproducible frontend builds:** The regenerated `frontend/package-lock.json` was captured from GitHub Actions and committed. GitHub Actions runs `npm ci`, frontend lint, component tests and Vite production build. Deployment preview, browser accessibility and live AI integration remain unverified.
+**Limits:** browser direct API calls may be blocked by CORS; long input beyond the explicit token estimate returns HTTP 413; some hosted model providers and free quotas may stop output despite keep-alives. Reconnect replay is not implemented. Avoid storing sensitive documents where third-party data retention is unacceptable.
 
-## Downloads and desktop client
+## Project layout
 
-PACE is open-source under the [MIT License](LICENSE).
+- `frontend/`: dashboard, workspaces, model controls, docs/privacy pages, browser runner and tests
+- `backend/`, `masteries/api/`: FastAPI, request validation, SSE and session ownership
+- `masteries/services/`: inference providers, SQLite/PostgreSQL persistence, PDF processing and telemetry
+- `ai-service/`: hosted Hugging Face inference adapter
+- `desktop/`, `frontend/src-tauri/` (desktop branch): model discovery, Python sidecar and native OS keychain
+- `core/`, `infra/`: configuration and opt-in local sandbox
+- `docs/`: architecture, deployment, tests and troubleshooting
 
-**The built-in Python runner now works on the [live website](https://pace-ensemble.netlify.app).**
-Open **Coding → Python runner** and choose **Run Python**. A self-hosted Python
-WebAssembly runtime executes scripts in a local Web Worker without allowing
-arbitrary execution on Render. See [Python runner documentation](docs/PYTHON_RUNNER.md).
-Live Chromium verification: [successful public-site test](https://github.com/KiritoTempest175/PACE/actions/runs/37972848669).
+## Roadmap
 
-The desktop application source remains on the independent
-[`feature/tauri-desktop` branch](https://github.com/KiritoTempest175/PACE/tree/feature/tauri-desktop).
-PACE Desktop **v0.4.0** has a tested Windows x64 NSIS installer, a bundled
-FastAPI/SQLite backend, Ollama model management and the same local Python runner.
-The Windows installer and source/deployment ZIPs are in the
-[verified v0.4.0 GitHub Actions artifact](https://github.com/KiritoTempest175/PACE/actions/runs/37972608175/artifacts/11637461967).
-Windows installation/startup smoke: [successful test](https://github.com/KiritoTempest175/PACE/actions/runs/37973552672).
+- Provider-aware completion metadata and resumable streams
+- True context-token counting and large document chunking
+- Verified direct GGUF support if runtime testing establishes it
+- OS-specific installation and accessibility audits
 
-**Release publication status:** the v0.4.0 installer is compiled and tested,
-but GitHub rejected automated publishing with HTTP 403, so v0.4.0 is not yet
-listed in the public Releases tab. The previous public
-[`desktop-v0.3.0` release](https://github.com/KiritoTempest175/PACE/releases/tag/desktop-v0.3.0)
-does **not** include the fixed Python runner. GitHub Actions artifacts require
-GitHub access and expire; a public Release should be created after approval.
+## License & contact
 
-Python WebAssembly code execution is not a hardened security sandbox;
-do not run malicious third-party code.
+MIT — [LICENSE](LICENSE). Contributions: [CONTRIBUTING.md](CONTRIBUTING.md). Report security issues privately per [SECURITY.md](SECURITY.md).
 
-## Deployment
-
-Refer to [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for platform-specific settings, env tables and verification. The architecture is designed to fit zero-recurring-hosting-cost **quotas**, not zero operational limits. ZeroGPU eligibility and daily quotas can change. Render Free spins down and has ephemeral local storage. PostgreSQL persistence must be configured separately.
-
-## Screenshot placeholders
-
-- `docs/screenshots/workspace-light.png`
-- `docs/screenshots/workspace-dark.png`
-- `docs/screenshots/literacy-upload.png`
-- `docs/screenshots/sandbox-local.png`
-- `docs/screenshots/mobile.png`
-
-These are placeholders, not screenshots of a verified deployed application.
-
-## Security and scope disclosure
-
-The 22 backend contract tests exercise selected security and persistence boundaries without external GPU/network calls. They do not establish universal correctness, formal container isolation, accessibility compliance, dependency safety, or actual GPU performance. Netlify, Render, Neon and Hugging Face staging integrations have passed a live inference and persistence smoke test, but browser accessibility, offline models, and Windows GUI flows have not been exhaustively tested. For a list of remaining issues, consult [docs/AUDIT_MATRIX.md](docs/AUDIT_MATRIX.md).
+**Maintainer:** [huzaifazaman38@gmail.com](mailto:huzaifazaman38@gmail.com) · [huzaifazaman.com](https://huzaifazaman.com) · [GitHub](https://github.com/KiritoTempest175)
