@@ -1,0 +1,59 @@
+name: PACE Web Quality (no deployment)
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/web-quality.yml
+permissions:
+  contents: read
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        working-directory: frontend
+        run: |
+          npm ci --no-audit --no-fund
+          npm install --no-save playwright@1.57.0
+      - name: Build and validate internal links
+        working-directory: frontend
+        run: |
+          npm run check:links
+          npm run build
+      - name: Install Chromium and dependencies
+        working-directory: frontend
+        run: npx playwright install --with-deps chromium
+      - name: Start production preview
+        working-directory: frontend
+        run: |
+          npm run preview -- --host 127.0.0.1 --port 4173 > /tmp/pace-preview.log 2>&1 &
+          for i in $(seq 1 40); do
+            if curl --silent --fail http://127.0.0.1:4173/ > /dev/null; then exit 0; fi
+            sleep 2
+          done
+          cat /tmp/pace-preview.log
+          exit 1
+      - name: Playwright responsive screenshots and horizontal-overflow checks
+        working-directory: frontend
+        run: npm run test:responsive
+      - name: Lighthouse 90+ quality gates
+        working-directory: frontend
+        run: npx --yes @lhci/cli@0.15.1 autorun
+      - name: Archive browser screenshots and Lighthouse results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pace-web-quality-artifacts
+          path: |
+            frontend/artifacts/responsive/
+            artifacts/lighthouse/
+          retention-days: 14
+          if-no-files-found: warn
