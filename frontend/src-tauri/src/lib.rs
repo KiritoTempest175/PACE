@@ -26,11 +26,46 @@ fn desktop_backend_info(state: State<'_, BackendState>) -> BackendInfo {
     }
 }
 
+
+fn credential_entry(id: &str) -> Result<keyring::Entry, String> {
+    if id.is_empty() || id.len() > 128 || !id.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'-' || c == b'_') {
+        return Err("Invalid credential identifier".into());
+    }
+    keyring::Entry::new("app.pace.workspaces.byok", id)
+        .map_err(|_| "OS keychain is unavailable".to_string())
+}
+
+#[tauri::command]
+fn desktop_store_key(model_id: String, secret: String) -> Result<(), String> {
+    if secret.is_empty() || secret.len() > 8192 {
+        return Err("Invalid API key length".into());
+    }
+    credential_entry(&model_id)?.set_password(&secret)
+        .map_err(|_| "Could not save API key to OS keychain".to_string())
+}
+
+#[tauri::command]
+fn desktop_read_key(model_id: String) -> Result<Option<String>, String> {
+    match credential_entry(&model_id)?.get_password() {
+        Ok(secret) => Ok(Some(secret)),
+        Err(keyring::Error::NoEntry) => Ok(None),
+        Err(_) => Err("Could not read OS keychain".into()),
+    }
+}
+
+#[tauri::command]
+fn desktop_delete_key(model_id: String) -> Result<(), String> {
+    match credential_entry(&model_id)?.delete_credential() {
+        Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
+        Err(_) => Err("Could not delete keychain entry".into()),
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
-        .invoke_handler(tauri::generate_handler![desktop_backend_info])
+        .invoke_handler(tauri::generate_handler![desktop_backend_info, desktop_store_key, desktop_read_key, desktop_delete_key])
         .setup(|app| {
             let app_data = app.path().app_local_data_dir()?;
             std::fs::create_dir_all(&app_data)?;
