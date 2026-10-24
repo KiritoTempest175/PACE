@@ -1,6 +1,6 @@
 """SQLite locally or persistent hosted PostgreSQL, with tenant-scoped queries."""
 from __future__ import annotations
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from threading import Lock
 from uuid import uuid4
 from sqlalchemy import create_engine, String, Text, ForeignKey, select, delete, event
@@ -157,3 +157,28 @@ def remove_document(owner: str, did: str) -> bool:
         db.execute(delete(ConversationDocument).where(ConversationDocument.document_id == did))
         db.delete(doc)
         return True
+
+def delete_owner_data(owner: str) -> dict[str, int]:
+    """Delete all session-scoped records together. Does not touch other sessions."""
+    with _sessionmaker().begin() as session:
+        conversations = session.scalars(select(Conversation.id).where(Conversation.owner == owner)).all()
+        docs = session.scalars(select(Document.id).where(Document.owner == owner)).all()
+        session.execute(delete(Message).where(Message.conversation_id.in_(conversations)))
+        session.execute(delete(ConversationDocument).where(ConversationDocument.owner == owner))
+        session.execute(delete(Conversation).where(Conversation.owner == owner))
+        session.execute(delete(Document).where(Document.owner == owner))
+        return {"conversations": len(conversations), "documents": len(docs)}
+
+def purge_expired_data(days: int) -> dict[str, int]:
+    """Remove records older than configured retention, including their dependents."""
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    with _sessionmaker().begin() as session:
+        expired = session.scalars(select(Conversation.id).where(Conversation.updated_at < cutoff)).all()
+        expired_docs = session.scalars(select(Document.id).where(Document.created_at < cutoff)).all()
+        session.execute(delete(Message).where(Message.conversation_id.in_(expired)))
+        session.execute(delete(ConversationDocument).where(
+            (ConversationDocument.conversation_id.in_(expired)) |
+            (ConversationDocument.document_id.in_(expired_docs))))
+        session.execute(delete(Conversation).where(Conversation.id.in_(expired)))
+        session.execute(delete(Document).where(Document.id.in_(expired_docs)))
+        return {"conversations": len(expired), "documents": len(expired_docs)}
