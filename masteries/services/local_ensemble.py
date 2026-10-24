@@ -20,9 +20,6 @@ def _actor(mode: str):
     if mode == "literacy":
         from masteries.literacy.training.actor.alt_actor_model import LiteracyActorModel
         return LiteracyActorModel()
-    if mode == "research":
-        from masteries.research.training.actor.alt_actor_model import ResearchActorModel
-        return ResearchActorModel()
     raise AIUnavailable("Invalid workspace")
 
 
@@ -34,9 +31,6 @@ def _critic(mode: str):
     if mode == "literacy":
         from masteries.literacy.training.critic.alt_critic_model import LiteracyCriticModel
         return LiteracyCriticModel()
-    if mode == "research":
-        from masteries.research.training.critic.alt_critic_model import ResearchCriticModel
-        return ResearchCriticModel()
     raise AIUnavailable("Invalid workspace")
 
 
@@ -45,7 +39,7 @@ def _generate(actor, mode: str, prompt: str):
         return actor.generate_code(prompt)
     if mode == "literacy":
         return actor.generate_text(prompt)
-    return actor.generate_research(prompt)
+    raise AIUnavailable('Unsupported workspace')
 
 
 def _revise(actor, mode: str, prompt: str, output: str, critique: str):
@@ -53,11 +47,11 @@ def _revise(actor, mode: str, prompt: str, output: str, critique: str):
         return actor.revise_code(prompt, output, critique)
     if mode == "literacy":
         return actor.revise_text(prompt, output, critique)
-    return actor.revise_research(prompt, output, critique)
+    raise AIUnavailable('Unsupported workspace')
 
 
 def stream_local_ensemble(prompt: str, mode: str, speed: str) -> Iterator[str]:
-    if mode not in ("coding", "literacy", "research") or speed not in ("fast", "pro"):
+    if mode not in ("coding", "literacy") or speed not in ("fast", "pro"):
         raise AIUnavailable("Unsupported workspace or model mode")
     actor = _actor(mode)
     initial = "".join(_generate(actor, mode, prompt))
