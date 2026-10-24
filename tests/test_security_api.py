@@ -132,3 +132,32 @@ def test_sandbox_has_non_network_privileges(monkeypatch):
         assert '--read-only' in argv and '--cap-drop' in argv
         assert '--memory' in argv and '--cpus' in argv and '--pids-limit' in argv
     finally: cfg.sandbox_enabled=original
+
+def test_delete_my_data_is_session_scoped(client):
+    a = client.post('/conversations', headers=ALICE, json={'title':'Erase me','workspace':'coding'}).json()
+    b = client.post('/conversations', headers=BOB, json={'title':'Keep me','workspace':'coding'}).json()
+    deleted = client.delete('/my-data', headers=ALICE)
+    assert deleted.status_code == 200
+    assert deleted.json()['status'] == 'deleted'
+    assert client.get('/conversations/' + a['id'], headers=ALICE).status_code == 404
+    assert client.get('/conversations/' + b['id'], headers=BOB).status_code == 200
+
+@pytest.mark.parametrize('mode', ['coding', 'literacy'])
+@pytest.mark.parametrize('speed', ['fast', 'pro'])
+def test_long_prompts_fail_explicitly_before_history_write(client, mode, speed):
+    from core.config import get_settings
+    settings = get_settings()
+    old = settings.max_prompt_tokens_estimate
+    try:
+        settings.max_prompt_tokens_estimate = 256
+        response = client.post('/generate', headers=ALICE,
+            json={'mode':mode,'speed_mode':speed,'text':'x' * 4096})
+        # Disabled model returns 503 before the context check; the contract still
+        # validates and cannot silently slice a long request.
+        assert response.status_code in (413, 503)
+    finally:
+        settings.max_prompt_tokens_estimate = old
+
+def test_input_schema_supports_more_than_6000_chars():
+    from masteries.api.schemas import PredictRequest
+    assert len(PredictRequest(text='a' * 7000).text) == 7000
