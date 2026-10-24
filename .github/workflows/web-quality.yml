@@ -5,6 +5,11 @@ on:
     branches: [main]
     paths:
       - .github/workflows/web-quality.yml
+      - 'frontend/src/**'
+      - 'frontend/scripts/**'
+      - 'frontend/public/**'
+      - 'frontend/index.html'
+      - 'frontend/package*.json'
 permissions:
   contents: read
 jobs:
@@ -54,6 +59,6 @@ jobs:
           name: pace-web-quality-artifacts
           path: |
             frontend/artifacts/responsive/
-            artifacts/lighthouse/
+            frontend/.lighthouseci/
           retention-days: 14
           if-no-files-found: warn
