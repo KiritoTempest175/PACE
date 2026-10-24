@@ -4,7 +4,7 @@ from pydantic import BaseModel, Field, ConfigDict
 
 class PredictRequest(BaseModel):
     model_config = ConfigDict(extra='forbid', str_strip_whitespace=True)
-    text: str = Field(min_length=1, max_length=6000)
+    text: str = Field(min_length=1, max_length=250000)
     mode: Literal['coding','literacy'] = 'coding'
     speed_mode: Literal['fast','pro'] = 'fast'
     document_id: str | None = Field(default=None, max_length=48, pattern=r'^doc-[0-9a-f-]{36}$')
