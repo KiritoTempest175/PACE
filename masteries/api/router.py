@@ -102,6 +102,10 @@ def delete_document(document_id: str, owner: str = Depends(owner_for_session)):
 
 
 async def prepare(req: PredictRequest, owner: str) -> tuple[str, str]:
+    user_token_estimate = (len(req.text) + 2) // 3
+    budget = get_settings().max_prompt_tokens_estimate
+    if user_token_estimate > budget:
+        raise HTTPException(status_code=413, detail=f"Prompt estimate ({user_token_estimate} tokens) exceeds configured context budget ({budget}). Split the input.")
     # Check configuration before writing conversations or messages.
     try:
         ensure_provider_configured()
