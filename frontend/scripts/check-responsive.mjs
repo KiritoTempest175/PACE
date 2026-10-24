@@ -31,17 +31,20 @@ try{
    const filename=(route==='/'?'dashboard':route.slice(1).replaceAll('/','-'))+'-'+width+'.png';
    await page.screenshot({path:path.join('artifacts/responsive',filename),fullPage:true});
   }
-  await page.goto(origin+'/',{waitUntil:'domcontentloaded'});
-  await page.locator('#root > *').first().waitFor({state:'attached',timeout:12000});
-  if(width<=700){
-   const open=page.getByRole('button',{name:'Open navigation'});
-   await open.click();
-   const expanded=await open.getAttribute('aria-expanded');
-   if(expanded!=='true')failures.push(width+': drawer did not open');
-   await page.keyboard.press('Escape');
-   if(await open.getAttribute('aria-expanded')!=='false')failures.push(width+': Escape did not close drawer');
-  }
   await page.close();
+  if(width<=700){
+   const menuPage=await browser.newPage({viewport:{width,height:850},deviceScaleFactor:1});
+   try{
+    await menuPage.goto(origin+'/',{waitUntil:'domcontentloaded'});
+    await menuPage.locator('#root > *').first().waitFor({state:'attached',timeout:12000});
+    const open=menuPage.getByRole('button',{name:'Open navigation'});
+    await open.click();
+    if(await open.getAttribute('aria-expanded')!=='true')failures.push(width+': drawer did not open');
+    await menuPage.keyboard.press('Escape');
+    if(await open.getAttribute('aria-expanded')!=='false')failures.push(width+': Escape did not close drawer');
+   }catch(error){failures.push(width+': mobile navigation could not be tested: '+error.message);}
+   finally{await menuPage.close();}
+  }
  }
 }finally{await browser.close();}
 if(failures.length){console.error(failures.join('\n'));process.exitCode=1;}
