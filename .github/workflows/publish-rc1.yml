@@ -184,4 +184,4 @@ jobs:
             gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --latest=false --title "PACE v0.1.0-rc1 (unsigned test builds)" --notes-file release/NOTES.md
           fi
           gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" release/assets/* --clobber
-          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json url,isPrerelease,isLatest,assets --jq '{url,isPrerelease,isLatest,assets:[.assets[].name]}'
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json url,isPrerelease,assets --jq '{url,isPrerelease,assets:[.assets[].name]}'
