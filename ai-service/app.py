@@ -28,7 +28,6 @@ MODEL.eval()
 SYSTEM_PROMPTS = {
     "coding": "Give clear, correct programming advice. Never claim code was executed or tested.",
     "literacy": "Answer only from the provided excerpts. Say clearly when information is missing.",
-    "research": "Explain carefully. Do not invent sources or claim web research was performed.",
 }
 
 
@@ -45,9 +44,10 @@ def _model_tokens(text: str, mode: str, budget: int) -> Iterator[str]:
     inputs = TOKENIZER(
         prompt_for(text, mode),
         return_tensors="pt",
-        truncation=True,
-        max_length=3072,
+        truncation=False,
     ).to(DEVICE)
+    if inputs["input_ids"].shape[-1] > 3072:
+        raise gr.Error("Input exceeds the hosted model's 3072-token context budget; split the request.")
     streamer = TextIteratorStreamer(
         TOKENIZER, skip_prompt=True, skip_special_tokens=True, timeout=5,
     )
@@ -100,15 +100,19 @@ def generate(text: str, mode: str, speed: str, max_new_tokens: int) -> Iterator[
     if not snapshot.strip():
         raise gr.Error("The AI model returned no response")
 
+    if len(TOKENIZER.encode(snapshot, add_special_tokens=False)) >= max_new_tokens - 4:
+        raise gr.Error("Hosted output reached the token limit; request continuation")
     if speed == "pro":
         critique_prompt = (
             "Review the answer for mistakes. Return the corrected answer only. "
             "If facts cannot be verified, state the uncertainty.\n\n"
-            "QUESTION:\n" + text[:5000] + "\n\nDRAFT:\n" + snapshot[:5000]
+            "QUESTION:\n" + text + "\n\nDRAFT:\n" + snapshot
         )
         revision = "".join(_model_tokens(critique_prompt, mode, max_new_tokens)).strip()
         if not revision:
             raise gr.Error("Review was incomplete")
+        if len(TOKENIZER.encode(revision, add_special_tokens=False)) >= max_new_tokens - 4:
+            raise gr.Error("Hosted review reached the token limit; request continuation")
         yield revision
 
 
