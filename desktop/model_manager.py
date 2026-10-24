@@ -1,6 +1,8 @@
 """Desktop-only Ollama installer and model manager. Not mounted on hosted APIs."""
 from __future__ import annotations
 import json
+import re
+from desktop.model_scan import scan_models
 import os
 import subprocess
 import tempfile
@@ -44,7 +46,7 @@ def read_selection() -> dict[str, str | None]:
         data = json.loads(_selection_file().read_text(encoding="utf-8"))
         if isinstance(data, dict):
             for role in chosen:
-                if data.get(role) in ALLOWED:
+                if isinstance(data.get(role), str) and re.fullmatch(r"[\\w][\\w.\\-/:]{0,159}", data[role]):
                     chosen[role] = data[role]
     except (FileNotFoundError, ValueError, OSError, TypeError):
         pass
@@ -94,8 +96,9 @@ def status():
     running = _running()
     names = installed_models() if running else []
     selected = read_selection()
+    available = list(CATALOG) + [{"id": name, "size": "installed", "family": "Ollama", "use": "Local installed model", "gb": None} for name in names if name not in ALLOWED]
     return {"installed":bool(_ollama_binary()) or running,"running":running,
-            "installed_models":names,"selected":selected,"catalog":list(CATALOG),
+            "installed_models":names,"selected":selected,"catalog":available,
             "actor_ready":bool(selected["actor"] and selected["actor"] in names),
             "critic_ready":bool(selected["critic"] and selected["critic"] in names)}
 
@@ -103,13 +106,18 @@ class ModelSelection(BaseModel):
     role: str
     model: str
 
-def _validate(req: ModelSelection) -> None:
-    if req.role not in ("actor","critic") or req.model not in ALLOWED:
+def _validate(req: ModelSelection, allow_installed: bool = False) -> None:
+    allowed_model = req.model in ALLOWED or (
+        allow_installed and isinstance(req.model, str) and
+        re.fullmatch(r"[\\w][\\w.\\-/:]{0,159}", req.model) and
+        req.model in installed_models()
+    )
+    if req.role not in ("actor","critic") or not allowed_model:
         raise HTTPException(422,"Choose an available actor/reviewer model")
 
 @router.post("/select")
 def select_model(req: ModelSelection):
-    _validate(req)
+    _validate(req, allow_installed=True)
     if req.model not in installed_models():
         raise HTTPException(409,"Download this model in PACE before selecting it")
     with _lock:
@@ -120,6 +128,11 @@ def select_model(req: ModelSelection):
 
 def _frame(event: dict) -> str:
     return "data: " + json.dumps(event,ensure_ascii=True) + "\n\n"
+
+@router.get("/scan")
+def scan_local_models():
+    return {"models": scan_models(), "runtime": "Ollama available separately; direct file loading unsupported"}
+
 
 @router.post("/start")
 def start_ollama():
