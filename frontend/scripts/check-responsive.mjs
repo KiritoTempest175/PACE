@@ -11,9 +11,13 @@ await fs.mkdir('artifacts/responsive',{recursive:true});
 try{
  for(const width of widths){
   const page=await browser.newPage({viewport:{width,height:850},deviceScaleFactor:1});
+  const runtimeErrors=[];
+  page.on('pageerror',error=>runtimeErrors.push(error.message));
+  page.on('console',msg=>{if(msg.type()==='error')runtimeErrors.push(msg.text());});
   for(const route of routes){
    await page.goto(origin+route,{waitUntil:'domcontentloaded'});
-   await page.locator('#root').waitFor();
+   try{await page.locator('#root > *').first().waitFor({state:'attached',timeout:12000});}
+   catch(error){failures.push(width+': '+route+' React root did not render: '+runtimeErrors.slice(-3).join(' | '));continue;}
    await page.waitForTimeout(350);
    const result=await page.evaluate(()=>({
     root:document.documentElement.scrollWidth,
