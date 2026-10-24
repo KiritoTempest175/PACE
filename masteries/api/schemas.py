@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field, ConfigDict
 class PredictRequest(BaseModel):
     model_config = ConfigDict(extra='forbid', str_strip_whitespace=True)
     text: str = Field(min_length=1, max_length=6000)
-    mode: Literal['coding','literacy','research'] = 'coding'
+    mode: Literal['coding','literacy'] = 'coding'
     speed_mode: Literal['fast','pro'] = 'fast'
     document_id: str | None = Field(default=None, max_length=48, pattern=r'^doc-[0-9a-f-]{36}$')
     conversation_id: str | None = Field(default=None, max_length=72, pattern=r'^chat-[0-9a-f-]{32,36}$')
@@ -17,7 +17,7 @@ class PredictResponse(BaseModel):
 class CreateConversationRequest(BaseModel):
     model_config = ConfigDict(extra='forbid', str_strip_whitespace=True)
     title: str = Field(default='New session', min_length=1, max_length=120)
-    workspace: Literal['coding','literacy','research'] = 'coding'
+    workspace: Literal['coding','literacy'] = 'coding'
 
 class TelemetryResponse(BaseModel):
     status: str
