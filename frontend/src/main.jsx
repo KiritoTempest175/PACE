@@ -1,6 +1,7 @@
 import React from 'react';
 import {createRoot} from 'react-dom/client';
 import App from './App.jsx';
+import AppErrorBoundary from './components/AppErrorBoundary.jsx';
 import {ThemeProvider} from './ThemeContext.jsx';
 import './styles.css';
-createRoot(document.getElementById('root')).render(<React.StrictMode><ThemeProvider><App/></ThemeProvider></React.StrictMode>);
+createRoot(document.getElementById('root')).render(<React.StrictMode><AppErrorBoundary><ThemeProvider><App/></ThemeProvider></AppErrorBoundary></React.StrictMode>);
