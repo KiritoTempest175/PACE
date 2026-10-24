@@ -6,7 +6,7 @@ from core.config import get_settings
 @pytest.mark.parametrize("mode", ["coding", "literacy"])
 def test_length_finish_triggers_continuation(monkeypatch, mode):
     calls = []
-    def fake_request(prompt, selected_mode):
+    def fake_request(prompt, selected_mode, role='actor'):
         calls.append((prompt,selected_mode))
         if len(calls) == 1:
             yield "first "
@@ -20,7 +20,7 @@ def test_length_finish_triggers_continuation(monkeypatch, mode):
 @pytest.mark.parametrize("mode", ["coding", "literacy"])
 def test_pro_executes_second_review_pass(monkeypatch, mode):
     calls = []
-    def fake_request(prompt, selected_mode):
+    def fake_request(prompt, selected_mode, role='actor'):
         calls.append(prompt)
         yield "reviewed" if "DRAFT:" in prompt else "draft"
         return "stop"
@@ -33,7 +33,7 @@ def test_overlap_stitches_without_repeating():
 
 def test_unfinished_code_triggers_followup(monkeypatch):
     calls = []
-    def fake_request(prompt, mode):
+    def fake_request(prompt, mode, role='actor'):
         calls.append(prompt)
         if len(calls)==1:
             yield "```python\\nprint(1)"
