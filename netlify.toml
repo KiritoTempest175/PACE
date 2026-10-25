@@ -1,8 +1,20 @@
+# Netlify Git deployment for the existing PACE frontend.
+# Base and publish paths are relative to the repository root.
 [build]
   base = "frontend"
   command = "npm ci --no-audit --no-fund && npm run build"
   publish = "dist"
-  environment = { VITE_API_BASE_URL = "https://pace-phase2-api.onrender.com" }
+
+[build.environment]
+  VITE_API_BASE_URL = "/api"
+
+# Forward browser API calls to the live Render FastAPI service.
+# This rule must precede the SPA fallback below.
+[[redirects]]
+  from = "/api/*"
+  to = "https://pace-phase2-api.onrender.com/:splat"
+  status = 200
+  force = true
 
 [[redirects]]
   from = "https://pace-ensemble.netlify.app/*"
