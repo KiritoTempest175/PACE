@@ -1,14 +1,11 @@
 import {useCallback,useEffect,useMemo,useRef,useState} from 'react';
-import {Activity,ArrowUp,BookOpen,Code2,FileText,LayoutDashboard,Menu,Plus,Settings,Upload,Trash2,X,WifiOff,LoaderCircle,TerminalSquare,Play} from 'lucide-react';
-import {Badge,Button,Card,Input,Modal,Skeleton,Tabs,Toast,Tooltip} from './components/ui.jsx';
+import {ArrowUp,ArrowRight,BookOpen,Code2,FileText,LayoutDashboard,Menu,Plus,Upload,Trash2,X,WifiOff,LoaderCircle,TerminalSquare,Play,Brain,ChevronRight} from 'lucide-react';
+import {Badge,Button,Card,Skeleton,Tabs,Toast,Tooltip} from './components/ui.jsx';
 import {createPythonRun} from './lib/pythonRunner.js';
 import {InfoPage,Footer,BrandLogo} from './components/InfoPages.jsx';
 import CodeResponse from './components/CodeResponse.jsx';
 import ModelsPage from './components/ModelsPage.jsx';
 import {directGenerate} from './lib/directProvider.js';
-const IS_PACE_DESKTOP=false;
-const desktopConnectionKind=()=> 'hosted';
-import {useTheme} from './ThemeContext.jsx';
 import {json,wakeServer,streamAnswer} from './lib/api.js';
 
 const WORKSPACES=[{id:'coding',label:'Coding',Icon:Code2,description:'Implementation and code explanations'},{id:'literacy',label:'Literacy',Icon:BookOpen,description:'General questions, explanations and document understanding'}];
@@ -16,7 +13,7 @@ const WORKSPACES=[{id:'coding',label:'Coding',Icon:Code2,description:'Implementa
 function App(){
  const [workspace,setWorkspace]=useState(()=>{
   const route=window.location.pathname.slice(1).replace(/\/$/,'')||'dashboard';
-  return ['dashboard','coding','literacy','models','settings','docs','privacy'].includes(route)?route:'not-found';
+  return ['dashboard','coding','literacy','models','docs','privacy'].includes(route)?route:'not-found';
  });
  const [models,setModels]=useState([]);
  const [activeCustom,setActiveCustom]=useState(null);
@@ -30,9 +27,6 @@ function App(){
  const [text,setText]=useState('');
  const [busy,setBusy]=useState(false);
  const [loadingHistory,setLoadingHistory]=useState(false);
- const [telemetryOpen,setTelemetryOpen]=useState(false);
- const [telemetry,setTelemetry]=useState(null);
- const [settingsOpen,setSettingsOpen]=useState(false);
  const [sidebarOpen,setSidebarOpen]=useState(false);
  const [notice,setNotice]=useState('');
  const [document,setDocument]=useState(null);
@@ -49,14 +43,12 @@ function App(){
  const pythonRunRef=useRef(null);
  const [pythonStatus,setPythonStatus]=useState('');
  const abortRef=useRef(null);
- const theme=useTheme();
- useEffect(()=>{const onPop=()=>{const route=window.location.pathname.slice(1).replace(/\/$/,'')||'dashboard';setWorkspace(['dashboard','coding','literacy','models','settings','docs','privacy'].includes(route)?route:'not-found');};window.addEventListener('popstate',onPop);return()=>window.removeEventListener('popstate',onPop);},[]);
- useEffect(()=>{const title=({dashboard:'Dashboard',coding:'Coding',literacy:'Literacy',models:'Models',settings:'Settings',docs:'Docs',privacy:'Privacy','not-found':'404'})[workspace]||'Dashboard';window.document.title=title+' | PACE';const meta=window.document.querySelector('meta[name="description"]');if(meta)meta.setAttribute('content',title+' in PACE — coding and PDF literacy with configurable AI inference.');},[workspace]);
+ useEffect(()=>{const onPop=()=>{const route=window.location.pathname.slice(1).replace(/\/$/,'')||'dashboard';setWorkspace(['dashboard','coding','literacy','models','docs','privacy'].includes(route)?route:'not-found');};window.addEventListener('popstate',onPop);return()=>window.removeEventListener('popstate',onPop);},[]);
+ useEffect(()=>{const title=({dashboard:'Dashboard',coding:'Coding',literacy:'Literacy',models:'Models',docs:'Docs',privacy:'Privacy','not-found':'404'})[workspace]||'Dashboard';window.document.title=title+' | PACE';const meta=window.document.querySelector('meta[name="description"]');if(meta)meta.setAttribute('content',title+' in PACE — coding and PDF literacy with configurable AI inference.');},[workspace]);
  useEffect(()=>{if(!sidebarOpen)return;const nav=window.document.querySelector('.sidebar');const previous=window.document.activeElement;const focus=nav?.querySelector('button,a,[tabindex]:not([tabindex="-1"])');focus?.focus();const key=e=>{if(e.key==='Escape'){setSidebarOpen(false);return;}if(e.key!=='Tab')return;const nodes=[...(nav?.querySelectorAll('button:not([disabled]),a[href],[tabindex]:not([tabindex="-1"])')||[])];if(!nodes.length)return;const first=nodes[0],last=nodes[nodes.length-1];if(e.shiftKey&&window.document.activeElement===first){e.preventDefault();last.focus();}else if(!e.shiftKey&&window.document.activeElement===last){e.preventDefault();first.focus();}};window.document.addEventListener('keydown',key);return()=>{window.document.removeEventListener('keydown',key);previous?.focus?.();};},[sidebarOpen]);
  const statusLabel=online==='online'?'API online':online==='waking'?'Waking up API':online==='checking'?'Connecting':'API unavailable';
  const refreshList=useCallback(async()=>{try{setConversations(await json('/conversations'));}catch(e){setNotice(`Could not load chats: ${e.message}`);}},[]);
  useEffect(()=>{let cancelled=false;setOnline('checking');wakeServer(()=>!cancelled&&setOnline('waking')).then(async data=>{if(cancelled)return;setOnline('online');setProvider(data.ai_provider||'disabled');await refreshList();}).catch(()=>!cancelled&&setOnline('offline'));return()=>{cancelled=true;};},[boot,refreshList]);
- useEffect(()=>{if(online!=='online'||!telemetryOpen)return;let live=true;const refresh=()=>json('/telemetry').then(v=>live&&setTelemetry(v)).catch(()=>live&&setTelemetry(null));refresh();const timer=setInterval(refresh,12000);return()=>{live=false;clearInterval(timer);};},[telemetryOpen,online]);
  useEffect(()=>{scrollRef.current?.scrollIntoView({behavior:'smooth'});},[messages]);
  useEffect(()=>()=>{pythonRunRef.current?.cancel();},[]);
  const executeLocalPython=async()=>{
@@ -93,23 +85,26 @@ function App(){
  };
  const uploadPdf=async file=>{if(!file)return;if(!file.name.toLowerCase().endsWith('.pdf')||file.size>8*1024*1024){setError('Select a PDF smaller than 8 MB.');return;}setUploading(true);setError('');try{const data=new FormData();data.append('file',file);const outcome=await json('/upload',{method:'POST',body:data});setDocument({...outcome,displayName:file.name});setNotice('Document processed. You can now ask questions about it.');}catch(e){setError(e.message);}finally{setUploading(false);if(fileRef.current)fileRef.current.value='';}};
  const removeChat=async item=>{if(!window.confirm('Delete this conversation?'))return;try{await json(`/conversations/${encodeURIComponent(item.id)}`,{method:'DELETE'});if(item.id===activeId)newChat();await refreshList();}catch(e){setError(e.message);}};
- const activeWorkspace=WORKSPACES.find(w=>w.id===workspace) || {label:'Dashboard',description:'System overview',Icon:LayoutDashboard};
+ const activeWorkspace=WORKSPACES.find(w=>w.id===workspace) || {label:({dashboard:'Dashboard',models:'Models',docs:'Docs',privacy:'Privacy','not-found':'404'})[workspace]||'Dashboard',description:'System overview',Icon:LayoutDashboard};
  const navigate=page=>{window.history.pushState(null,'',page==='dashboard'?'/':'/'+page);setWorkspace(page);setSidebarOpen(false);setError('');};
  const goDashboard=()=>navigate('dashboard');
- const isLocal=IS_PACE_DESKTOP&&desktopConnectionKind()==='local'&&!activeCustom&&['ollama','local'].includes(provider);
  return <div className="app-shell">
   <a href="#main" className="skip-link">Skip to workspace</a>
   {sidebarOpen&&<button className="mobile-backdrop" aria-label="Close navigation" onClick={()=>setSidebarOpen(false)}/>}
   <aside id="pace-sidebar" className={`sidebar ${sidebarOpen?'open':''}`} aria-label="Main navigation">
    <button className="brand brand-button" onClick={goDashboard} aria-label="PACE dashboard"><BrandLogo size={36}/><div><strong>PACE</strong><small>Actor / Critic</small></div></button>
-   <Button variant="secondary" className="new-chat" onClick={newChat}><Plus size={17}/> New conversation</Button>
-   <p className="section-caption">NAVIGATION</p><nav aria-label="Workspaces" className="workspace-nav"><button className={workspace==='dashboard'?'selected':''} aria-current={workspace==='dashboard'?'page':undefined} onClick={goDashboard}><LayoutDashboard size={18}/>Dashboard</button><button onClick={()=>navigate('models')} className={workspace==='models'?'selected':''}><Settings size={18}/>Models</button><button onClick={()=>navigate('docs')} className={workspace==='docs'?'selected':''}><BookOpen size={18}/>Docs</button>{WORKSPACES.map(({id,label,Icon})=><button key={id} className={workspace===id?'selected':''} aria-current={workspace===id?'page':undefined} onClick={()=>{navigate(id);newChat();}}><Icon size={18}/>{label}</button>)}</nav>
+   <p className="section-caption">WORKSPACE</p><nav aria-label="Workspaces" className="workspace-nav">
+    <button className={workspace==='dashboard'?'selected':''} aria-current={workspace==='dashboard'?'page':undefined} onClick={goDashboard}><LayoutDashboard size={18}/>Dashboard</button>
+    {WORKSPACES.map(({id,label,Icon})=><button key={id} className={workspace===id?'selected':''} aria-current={workspace===id?'page':undefined} onClick={()=>{navigate(id);newChat();}}><Icon size={18}/>{label}</button>)}
+    <button onClick={()=>navigate('models')} className={workspace==='models'?'selected':''}><Brain size={18}/>Models</button>
+    <button onClick={()=>navigate('docs')} className={workspace==='docs'?'selected':''}><BookOpen size={18}/>Docs</button>
+   </nav>
+   <Button variant="secondary" className="new-chat" onClick={()=>{navigate(workspace==='literacy'?'literacy':'coding');newChat();}}><Plus size={16}/>New conversation</Button>
    <div className="sidebar-history"><p className="section-caption">RECENT CONVERSATIONS</p>{conversations.length===0?<p className="muted small">Your recent conversations appear here.</p>:conversations.slice(0,25).map(item=><div className="history-row" key={item.id}><button className={activeId===item.id?'active':''} onClick={()=>openConversation(item)} title={item.title}>{item.title}</button><Tooltip text="Delete conversation"><button className="icon-action" aria-label={`Delete ${item.title}`} onClick={()=>removeChat(item)}><Trash2 size={14}/></button></Tooltip></div>)}</div>
    <div className="sidebar-footer"><Button variant="ghost" onClick={()=>navigate('privacy')}>Privacy & data</Button></div>
   </aside>
   <main id="main" className="main-panel">
-   <header className="topbar"><div className="topbar-left"><Button size="sm" variant="ghost" className="mobile-menu" aria-label="Open navigation" aria-expanded={sidebarOpen} aria-controls="pace-sidebar" onClick={()=>setSidebarOpen(true)}><Menu size={20}/></Button><div><p className="eyebrow">WORKSPACE</p><h1>{activeWorkspace.label}</h1></div></div><div className="topbar-actions"><span className={'connection-indicator '+(online==='online'?'is-online':online==='offline'?'is-offline':'')}><span className="connection-dot"/>{statusLabel}</span></div></header>
-   {telemetryOpen&&<Card className="telemetry"><div className="telemetry-head"><h2>System telemetry</h2><Badge>Measured on API host</Badge></div>{!telemetry?<p className="muted">Live telemetry is not currently available.</p>:<dl><div><dt>CPU usage</dt><dd>{telemetry.cpu_utilization??'—'}%</dd></div><div><dt>Memory</dt><dd>{telemetry.ram_usage_mb??'—'} MB</dd></div><div><dt>Device</dt><dd>{telemetry.device??'Unknown'}</dd></div><div><dt>Status</dt><dd>{telemetry.status??'Unknown'}</dd></div></dl>}</Card>}
+   <header className="topbar"><div className="topbar-left"><Button size="sm" variant="ghost" className="mobile-menu" aria-label="Open navigation" aria-expanded={sidebarOpen} aria-controls="pace-sidebar" onClick={()=>setSidebarOpen(true)}><Menu size={20}/></Button><div><h1><span style={{color:'#797288'}}>PACE / </span>{activeWorkspace.label}</h1></div></div><div className="topbar-actions"><span className={'connection-indicator '+(online==='online'?'is-online':online==='offline'?'is-offline':'')}><span className="connection-dot"/>{statusLabel}</span></div></header>
    {workspace==='coding'&&<div className="coding-tools"><details><summary><TerminalSquare size={16}/> Python runner <Badge tone="success">Runs on your device</Badge></summary>
      <label className="field" htmlFor="sandbox-code"><span>Python source (local WebAssembly runtime)</span><textarea id="sandbox-code" spellCheck="false" value={code} maxLength={20000} onChange={e=>setCode(e.target.value)} rows={5} placeholder="print('Hello from PACE')"/></label>
      <div className="runner-actions">
@@ -120,10 +115,36 @@ function App(){
      {codeResult&&<div className="runner-output" role="status"><strong>Result: {codeResult.status}</strong><pre>{(codeResult.stdout||'')+(codeResult.stderr?'\n'+codeResult.stderr:'')||'(No output. Use print() to display values.)'}</pre></div>}
      <p className="small muted">Runs Python locally in a browser worker. Not a hardened security sandbox; do not run untrusted code. Some native Python packages and OS features are unavailable.</p>
     </details></div>}
-   {workspace==='dashboard'&&<section className="dashboard-panel" aria-label="System overview"><h2>System overview</h2><p className="muted">Runtime measurements are reported by the connected API host, not necessarily your device.</p><div className="dashboard-grid"><Card><h3>Connection</h3><p>{statusLabel}</p><p className="muted">Provider: {provider}</p></Card><Card><h3>Inference</h3><p>Fast: single generation</p><p>Pro: additional review when supported</p><p className="muted">A separate critic is not guaranteed for hosted inference.</p></Card><Card><h3>Recent sessions</h3><p>{conversations.length} available in this session</p></Card><Card><h3>Quick start</h3><div className="dashboard-actions"><Button onClick={()=>{navigate('coding');newChat();}}>Coding</Button><Button variant="secondary" onClick={()=>{navigate('literacy');newChat();}}>Literacy</Button></div></Card></div></section>}
+   {workspace==='dashboard'&&<section className="dashboard-panel" aria-label="System overview">
+     <div className="dashboard-hero">
+      <span className="hero-kicker">PACE / THE INTELLIGENCE WORKSPACE</span>
+      <h2>Build with a<br/><em>second perspective.</em></h2>
+      <p>One system creates. Another reviews. You stay in control of the final result.</p>
+      <div className="dashboard-actions"><Button onClick={()=>{navigate('coding');newChat();}}>Start coding <ArrowRight size={16}/></Button><Button variant="secondary" onClick={()=>{navigate('literacy');newChat();}}>Explore Literacy</Button></div>
+     </div>
+     <h3 className="sectionhead">SYSTEM OVERVIEW</h3>
+     <div className="dashboard-grid">
+      <Card><h3>Connection</h3><p className="metric cyan">{online==='online'?'Connected':online==='waking'?'Waking up':online==='checking'?'Connecting':'Offline'}</p><p>{statusLabel}</p></Card>
+      <Card><h3>Provider</h3><p className="metric">{provider==='disabled'?'Not configured':provider}</p><p>PACE backend inference</p></Card>
+      <Card><h3>Actor / Critic</h3><p className="metric purple">Standby</p><p>Reviewer runs in Pro when supported</p></Card>
+      <Card><h3>Recent sessions</h3><p className="metric">{String(conversations.length).padStart(2,'0')}</p><p>Available to your session</p></Card>
+     </div>
+     <h3 className="sectionhead">YOUR WORKSPACE</h3>
+     <div className="dashboard-workspaces">
+      <Card><h3>Dual-engine workflow</h3><p>Transparent generation and review. Hosted Pro may use the same model for both stages.</p>
+       <div className="pipeline"><div className="stage"><strong>Actor</strong><span>Generate</span></div><span className="arrow">→</span><div className="stage"><strong>Critic</strong><span>Review</span></div><span className="arrow">→</span><div className="stage"><strong>Result</strong><span>Inspect</span></div></div>
+      </Card>
+      <Card><h3>Start something</h3>
+       <button className="dashboard-route" onClick={()=>{navigate('coding');newChat();}}><span className="dashboard-route-icon"><Code2 size={18}/></span><span><b>Coding</b><small>Generate, refactor and debug</small></span><ChevronRight size={17}/></button>
+       <button className="dashboard-route" onClick={()=>{navigate('literacy');newChat();}}><span className="dashboard-route-icon"><BookOpen size={18}/></span><span><b>Literacy</b><small>General questions and document analysis</small></span><ChevronRight size={17}/></button>
+      </Card>
+     </div>
+     <div className="recent-panel card"><strong>Recent activity</strong><p>{conversations.length?conversations.length+' conversation(s) available. Open one from the sidebar.':'No recent sessions yet. Start with Coding or Literacy.'}</p></div>
+    </section>}
    {['docs','privacy','not-found'].includes(workspace)&&<InfoPage page={workspace} onNavigate={navigate}/>}
    {workspace==='models'&&<ModelsPage models={models} setModels={setModels} active={activeCustom} setActive={setActiveCustom} onNotice={setNotice}/>}
-   {workspace==='settings'&&<section className="info-page"><h2>Settings &amp; data controls</h2><p>Delete all conversations and extracted PDF text associated with the current anonymous session from the connected backend database. This does not delete upstream provider records or backups.</p><div className="dashboard-actions"><Button onClick={()=>setSettingsOpen(true)}>Open preferences</Button><Button variant="secondary" disabled={online!=='online'} onClick={clearAllData}>Delete my data</Button><Button variant="secondary" onClick={()=>{setModels([]);setActiveCustom(null);setNotice('Browser API keys cleared from memory.');}}>Clear browser model keys</Button></div></section>}
+   {workspace==='privacy'&&<section className="privacy-controls card"><div><h3>Session data controls</h3><p>Delete your conversation and PDF text from the connected API, or clear local browser-held model keys.</p></div><Button variant="secondary" disabled={online!=='online'} onClick={clearAllData}>Delete session data</Button><Button variant="secondary" onClick={()=>{setModels([]);setActiveCustom(null);setNotice('Browser model keys cleared from memory.');}}>Clear model keys</Button></section>}
+   <div className={['coding','literacy'].includes(workspace)?'workspace-stage':'workspace-empty'}>
    {workspace!=='dashboard'&&['coding','literacy'].includes(workspace)&&<section className="conversation" aria-label="Conversation panel"><div className="conversation-content">
     {loadingHistory?<div className="history-loading"><Skeleton/><Skeleton width="75%"/><Skeleton width="90%"/></div>:messages.length===0?<div className="empty-state"><div className="empty-icon"><activeWorkspace.Icon size={23}/></div><h2>Start with {activeWorkspace.label.toLowerCase()}</h2><p>{activeWorkspace.description}. Responses require a configured, available AI service.</p>{workspace==='literacy'&&<p>Ask anything, or upload a PDF for document-grounded answers.</p>}{online!=='online'&&<div className="connect-hint"><WifiOff size={16}/><span>The API may be sleeping on Render.</span><Button size="sm" variant="secondary" onClick={()=>setBoot(x=>x+1)}>Retry connection</Button></div>}</div>:<div className="message-list" role="log" aria-live="polite" aria-relevant="additions text">{messages.map((m,i)=><article className={`message ${m.role==='user'?'is-user':''}`} key={m.id||i}><div className="avatar" aria-hidden="true">{m.role==='user'?'Y':'P'}</div><div className="message-body"><strong>{m.role==='user'?'You':'PACE'}</strong>{m.role==='assistant'?<><CodeResponse text={m.text||(busy?'Generating response…':'')}/>{m.incomplete&&<p className="inline-error">Response interrupted. Use Continue to request the missing portion.</p>}</>:<p>{m.text}</p>}</div></article>)}<div ref={scrollRef}/></div>}
    </div></section>}
@@ -131,9 +152,10 @@ function App(){
     {workspace==='literacy'&&<div className="document-row">{document?<><FileText size={16}/><span title={document.displayName}>{document.displayName}</span><Badge tone="success">Ready</Badge><Button variant="ghost" size="sm" onClick={async()=>{try{await json(`/documents/${document.document_id}`,{method:'DELETE'});}catch{}setDocument(null);}} aria-label="Remove document"><X size={16}/></Button></>:<span className="muted">No document selected.</span>}<input ref={fileRef} type="file" accept=".pdf,application/pdf" hidden onChange={e=>uploadPdf(e.target.files?.[0])}/><Button variant="secondary" size="sm" disabled={uploading||busy} onClick={()=>fileRef.current?.click()}><Upload size={14}/>{uploading?'Uploading…':'Upload PDF'}</Button></div>}
     <form className="composer" onSubmit={send}><label htmlFor="prompt" className="sr-only">Message PACE</label><textarea id="prompt" ref={inputRef} value={text}  disabled={busy} onChange={e=>setText(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send(e);}}} placeholder={workspace==='literacy'?'Ask anything, or ask about your PDF…':'Describe a coding task…'} rows={3}/><div className="composer-actions">{busy&&<Badge tone="warning">{speed.toUpperCase()} · {stage==='critic'?'Critic reviewing':'Actor drafting'}</Badge>}<Tabs label="Model mode" items={[{value:'fast',label:'Fast'},{value:'pro',label:'Review'}]} value={speed} onChange={setSpeed}/><div className="composer-actions-right"><span className="small muted">{text.length} characters</span><Button type="submit" disabled={busy||online!=='online'||!text.trim()} aria-label="Send message">{busy?<LoaderCircle size={18} className="spin"/>:<ArrowUp size={18}/>}</Button></div></div></form>{incomplete&&<div className="runner-actions"><Button variant="secondary" onClick={()=>{setText('Continue exactly where the preceding response ended, without repeating content; close all code fences.');inputRef.current?.focus();setIncomplete(false);}}>Continue</Button></div>}<p className="composer-footnote">AI output may contain mistakes. Review mode may reuse the same model; it is not independently verified.</p>
    </div>}
+   </div>
    <Footer onNavigate={navigate}/>
+   <nav className="pace-mobile-tabs" aria-label="Mobile navigation">{[['dashboard','Home',LayoutDashboard],['coding','Coding',Code2],['literacy','Literacy',BookOpen],['models','Models',Brain]].map(([id,label,Icon])=><button key={id} className={workspace===id?'selected':''} aria-current={workspace===id?'page':undefined} onClick={()=>{navigate(id);if(id==='coding'||id==='literacy')newChat();}}><Icon size={18}/>{label}</button>)}</nav>
   </main>
-  <Modal open={settingsOpen} onClose={()=>setSettingsOpen(false)} title="Preferences"><div className="settings-grid"><Button variant="secondary" disabled={online!=='online'} onClick={clearAllData}>Delete my data (connected API)</Button><Button variant="secondary" onClick={()=>{setModels([]);setActiveCustom(null);setNotice('API keys cleared from memory.');}}>Clear model keys</Button><label className="field"><span>Appearance</span><select value={theme.preference} onChange={e=>theme.setPreference(e.target.value)}><option value="system">Follow system</option><option value="light">Light</option><option value="dark">Dark</option></select></label><div className="settings-info"><strong>AI provider</strong><Badge>{provider}</Badge><p>Provider credentials are managed on the backend and never placed in the browser.</p></div><div className="settings-info"><strong>Sandbox</strong><Badge>Unavailable on hosted free tier</Badge><p>Executing generated programs requires a separate isolated runtime.</p></div></div></Modal>
   <Toast message={notice} onClose={()=>setNotice('')}/>
  </div>;
 }
