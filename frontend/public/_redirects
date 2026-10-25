@@ -1,2 +1,4 @@
+# Render FastAPI proxy; must appear before the React SPA fallback
+/api/*  https://pace-phase2-api.onrender.com/:splat  200!
 https://pace-ensemble.netlify.app/*  https://pace.huzaifazaman.com/:splat  301!
 /*  /index.html  200
