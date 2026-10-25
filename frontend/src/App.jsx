@@ -122,7 +122,7 @@ function App(){
       <p>One system creates. Another reviews. You stay in control of the final result.</p>
       <div className="dashboard-actions"><Button onClick={()=>{navigate('coding');newChat();}}>Start coding <ArrowRight size={16}/></Button><Button variant="secondary" onClick={()=>{navigate('literacy');newChat();}}>Explore Literacy</Button></div>
      </div>
-     <h3 className="sectionhead">SYSTEM OVERVIEW</h3>
+     <h3 className="sectionhead">System overview</h3>
      <div className="dashboard-grid">
       <Card><h3>Connection</h3><p className="metric cyan">{online==='online'?'Connected':online==='waking'?'Waking up':online==='checking'?'Connecting':'Offline'}</p><p>{statusLabel}</p></Card>
       <Card><h3>Provider</h3><p className="metric">{provider==='disabled'?'Not configured':provider}</p><p>PACE backend inference</p></Card>
