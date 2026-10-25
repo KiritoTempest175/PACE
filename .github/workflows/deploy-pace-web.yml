@@ -1,0 +1,58 @@
+name: Deploy PACE Web to Netlify
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'frontend/**'
+      - 'netlify.toml'
+      - '.github/workflows/deploy-pace-web.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pace-web-netlify-main
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci --no-audit --no-fund
+      - name: Lint, test, and build web app
+        working-directory: frontend
+        run: |
+          npm run lint
+          npm test -- --run
+          npm run build
+      - name: Check deployment credential
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+        run: |
+          if [ -z "$NETLIFY_AUTH_TOKEN" ]; then
+            echo "::error::NETLIFY_AUTH_TOKEN repository secret is required to deploy the existing PACE site."
+            exit 1
+          fi
+      - name: Deploy compiled frontend to PACE production site
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ba128faa-c6da-43f7-9fcc-4d51db32e87c
+        run: |
+          npx --yes netlify-cli@23 deploy \
+            --prod \
+            --dir=frontend/dist \
+            --site="$NETLIFY_SITE_ID" \
+            --message="PACE web ${GITHUB_SHA}" \
+            --json
