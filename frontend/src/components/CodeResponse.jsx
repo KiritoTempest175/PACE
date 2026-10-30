@@ -1,3 +1,4 @@
+import {parseGeneratedResponse} from '../lib/parseGeneratedResponse.js';
 import {useState} from 'react';
 import {Check,Copy,Download,WrapText} from 'lucide-react';
 
@@ -13,13 +14,12 @@ function CodeBlock({lang='text',filename,code,incomplete=false}){
  const download=()=>{const blob=new Blob([code],{type:'text/plain;charset=utf-8'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=file;a.click();URL.revokeObjectURL(url);};
  return <div className="pace-code-block"><div className="pace-code-head"><span>{file} · {lang||'text'}{incomplete?' · unfinished block':''}</span><div><button onClick={copy} aria-label="Copy code">{copied?<Check size={14}/>:<Copy size={14}/>} {copied?'Copied':'Copy'}</button><button onClick={()=>setWrap(v=>!v)} aria-pressed={wrap} title="Toggle line wrap"><WrapText size={14}/></button><button onClick={download} title="Download file" aria-label={'Download '+file}><Download size={14}/></button></div></div><pre className={wrap?'code-wrap':''}><code>{highlighted(code,lang)}</code></pre></div>;
 }
-export default function CodeResponse({text=''}){
- const re=/```([^\n]*)\n([\s\S]*?)```/g;const output=[];let last=0;let index=0;let match;
- while((match=re.exec(text))!==null){if(match.index>last)output.push(<p key={'p'+index}>{text.slice(last,match.index)}</p>);
- const header=match[1].trim().split(/\s+/);let lang=header[0]||'text';const filename=(header.slice(1).find(x=>x.startsWith('filename='))||'').replace(/^filename=/,'')||header.slice(1).find(x=>/\.[a-z0-9]+$/i.test(x));
- output.push(<CodeBlock key={'code'+index} lang={lang} filename={filename} code={match[2]}/>);last=re.lastIndex;index++;}
- if(last<text.length){const rest=text.slice(last);const open=rest.match(/```([^\n]*)\n([\s\S]*)$/);
- if(open){if(open.index>0)output.push(<p key="rest-text">{rest.slice(0,open.index)}</p>);output.push(<CodeBlock key="unfinished" lang={open[1].trim().split(/\s+/)[0]||'text'} code={open[2]} incomplete/>);}
- else output.push(<p key="rest">{rest}</p>);}
- return <div className="response-content">{output}</div>;
+export default function CodeResponse({text='',mode='both'}) {
+ const {explanation,files}=parseGeneratedResponse(text);
+ const showExplanation=mode!=='code';
+ const showCode=mode!=='explanation';
+ return <div className="response-content">
+  {showExplanation&&(explanation?<p>{explanation}</p>:mode==='explanation'?<p className="muted">{files.length?'Code is displayed in the Generated code panel.':'Waiting for an AI explanation…'}</p>:null)}
+  {showCode&&(files.length?files.map((file,i)=><CodeBlock key={i} lang={file.language} filename={file.filename} code={file.code} incomplete={file.incomplete}/>):mode==='code'?<p className="muted">No code artifact in this reply yet.</p>:null)}
+ </div>;
 }
