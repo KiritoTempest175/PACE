@@ -227,3 +227,8 @@ body{background:var(--canvas);color:var(--text)}
  .workspace-stage.is-coding .generated-panel{order:2;flex-shrink:0;min-height:250px;height:auto;max-height:470px}
  .generated-panel-header span{flex-basis:100%;text-align:left}
 }
+
+.pace-brand-icon{display:block;flex-shrink:0;object-fit:contain;border-radius:7px}
+.dashboard-hero .hero-brand-art{position:absolute;z-index:0;right:0;top:-50px;width:300px;height:300px;object-fit:contain;mix-blend-mode:screen;opacity:.84;pointer-events:none}
+.dashboard-hero>.hero-kicker,.dashboard-hero>h2,.dashboard-hero>p,.dashboard-hero>.dashboard-actions{position:relative;z-index:1}
+@media(max-width:880px){.dashboard-hero .hero-brand-art{width:190px;height:190px;top:-8px;right:-22px;opacity:.28}}
