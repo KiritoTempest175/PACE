@@ -37,7 +37,7 @@ describe('bounded long-code streaming',()=>{
   const events=[];
   const result=await generateLongCode({text:'Make a long program',mode:'coding'},evt=>events.push(evt),undefined,{send:sender,maxRounds:2});
   expect(result.complete).toBe(false);
-  expect(result.reason).toBe('round_limit');
+  expect(result.reason).toBe('repeated_content');
   expect(events.at(-1)).toMatchObject({type:'long_done',complete:false});
  });
  it('surfaces a provider error that produces no text',async()=>{
