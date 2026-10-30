@@ -195,3 +195,35 @@ body{background:var(--canvas);color:var(--text)}
  .privacy-controls{width:calc(100% - 28px)}
 }
 @media(min-width:691px){.pace-mobile-tabs{display:none}}
+
+/* Web-only coding workbench: request, explanation, and code are independent panels. */
+.workspace-stage.is-coding{max-width:none;grid-template-columns:minmax(250px,.84fr) minmax(280px,1fr) minmax(310px,1.18fr);gap:14px}
+.workspace-stage.is-coding .composer-wrap{grid-column:1;grid-row:1;min-width:0}
+.workspace-stage.is-coding .conversation{grid-column:2;grid-row:1;min-width:0}
+.workspace-stage.is-coding .generated-panel{grid-column:3;grid-row:1;min-width:0}
+.generated-panel{display:flex;flex-direction:column;overflow:hidden;height:min(66vh,720px);min-height:460px;background:linear-gradient(145deg,#191821,#12121a);border:1px solid #35313f;border-radius:12px}
+.generated-panel-header{min-height:62px;display:flex;align-items:center;gap:9px;flex-wrap:wrap;border-bottom:1px solid #35313f;padding:14px 17px;color:#d4a0fc}
+.generated-panel-header h2{font-size:13px;margin:0;color:#f6f2fb}
+.generated-panel-header span{font-size:10px;color:#aaa3b7;flex:1;text-align:right}
+.generated-panel-scroll{overflow:auto;flex:1;min-height:0;padding:14px}
+.generated-placeholder{font-size:13px;line-height:1.75}
+.generated-reply{margin-bottom:18px;padding-bottom:12px;border-bottom:1px solid #35313f}
+.generated-reply-label{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:#b7a2c9}
+.generated-panel .pace-code-block{margin:10px 0 0}
+.generated-panel .pace-code-block pre{max-height:none;overflow:auto}
+.generated-panel .pace-code-head{flex-wrap:wrap}
+.generated-panel .response-content>.muted{font-size:12px;line-height:1.6}
+.explanation-heading{font-size:13px;font-weight:700;color:#f6f2fb;letter-spacing:.02em;margin:0 0 20px;padding-bottom:13px;border-bottom:1px solid #35313f}
+@media(max-width:1250px) and (min-width:691px){
+ .workspace-stage.is-coding{grid-template-columns:minmax(250px,.85fr) minmax(290px,1.15fr)}
+ .workspace-stage.is-coding .composer-wrap{grid-column:1;grid-row:1}
+ .workspace-stage.is-coding .conversation{grid-column:2;grid-row:1}
+ .workspace-stage.is-coding .generated-panel{grid-column:1/-1;grid-row:2;min-height:280px;height:auto;max-height:560px}
+}
+@media(max-width:690px){
+ .workspace-stage.is-coding{display:flex;flex-direction:column;gap:12px}
+ .workspace-stage.is-coding .composer-wrap{order:0}
+ .workspace-stage.is-coding .conversation{order:1;min-height:260px}
+ .workspace-stage.is-coding .generated-panel{order:2;flex-shrink:0;min-height:250px;height:auto;max-height:470px}
+ .generated-panel-header span{flex-basis:100%;text-align:left}
+}
