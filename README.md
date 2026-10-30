@@ -1,6 +1,6 @@
 # PACE — Pipelined Actor-Critic Ensemble
 
-![PACE logo](frontend/public/favicon.svg)
+![PACE logo](frontend/public/pace-logo.svg)
 [![CI](https://github.com/KiritoTempest175/PACE/actions/workflows/ci.yml/badge.svg)](https://github.com/KiritoTempest175/PACE/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
@@ -12,12 +12,12 @@
 
 | Feature | Actual behavior |
 | --- | --- |
-| Coding | Configured model inference; code-fence copy, wrap and download; Pyodide worker runner |
+| Coding | Separate prompt, AI explanation, and generated-code panels; code copy/download; Pyodide worker runner |
 | Literacy | Validated PDF upload and excerpt-based document questions |
 | Fast | One generation pass; Ollama can auto-continue bounded length finishes |
 | Pro | Draft and second review pass where implemented; hosted model can reuse the same weights |
-| Custom providers | OpenAI-compatible, OpenRouter, Anthropic and Google direct browser connections; provider CORS restrictions apply |
-| Credentials | Browser keys kept in memory, not transmitted to the PACE backend; desktop keyring implementation needs native verification |
+| Hosted inference | Web requests use the configured PACE backend; visitors do not connect their own provider accounts |
+| Credentials | No visitor API-key entry on the web. Hosted AI credentials, if required, are managed on the server |
 | Models | Ollama is the supported local runner; discovered GGUF/safetensors files are not proof of runnable direct loading |
 | History | Backend database stores session-scoped conversations, messages and extracted PDF text |
 | Long outputs | Explicit context/output bounds and errors; no guarantee of infinite-length results or resumable SSE replay |
@@ -27,7 +27,6 @@
 ```mermaid
 flowchart TD
   Web[React Vite / Netlify] --> API[FastAPI / Render]
-  Web -->|optional direct key & prompt| Provider[User's chosen API provider]
   API --> DB[(SQLite or PostgreSQL)]
   API --> PDFs[PDF extractor]
   API --> AI[HF / Ollama / local Actor-Critic]
