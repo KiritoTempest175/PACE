@@ -119,6 +119,7 @@ function App(){
     </details></div>}
    {workspace==='dashboard'&&<section className="dashboard-panel" aria-label="System overview">
      <div className="dashboard-hero">
+      <img className="hero-brand-art" src="/pace-logo.svg" width="300" height="300" alt="PACE — Pipelined Actor-Critic Ensemble"/>
       <span className="hero-kicker">PACE / THE INTELLIGENCE WORKSPACE</span>
       <h2>Build with a<br/><em>second perspective.</em></h2>
       <p>One system creates. Another reviews. You stay in control of the final result.</p>
