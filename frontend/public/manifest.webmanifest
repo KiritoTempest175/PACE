@@ -8,7 +8,7 @@
   "theme_color": "#7B3FBF",
   "icons": [
     {
-      "src": "/favicon.svg",
+      "src": "/pace-monogram.svg",
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any maskable"
