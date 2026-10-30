@@ -4,9 +4,12 @@ on:
   workflow_dispatch:
   push:
     branches:
-      - phase2/production-hardening-20261009
+      - main
     paths:
-      - ai-service/.deploy-request
+      - 'ai-service/app.py'
+      - 'ai-service/requirements.txt'
+      - 'ai-service/README.md'
+      - '.github/workflows/deploy-hf-space.yml'
 
 permissions:
   contents: read
