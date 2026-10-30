@@ -36,7 +36,9 @@ jobs:
           npm run build
       - name: Use preinstalled Playwright Chromium
         working-directory: frontend
-        run: echo "CHROME_PATH=$(node -e \"console.log(require('playwright').chromium.executablePath())\")" >> "$GITHUB_ENV"
+        run: |
+          CHROME=$(node -p "require('playwright').chromium.executablePath()")
+          echo "CHROME_PATH=$CHROME" >> "$GITHUB_ENV"
       - name: Start production preview
         working-directory: frontend
         run: |
