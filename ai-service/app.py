@@ -17,7 +17,7 @@ import gradio as gr
 import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer, TextIteratorStreamer
 
-MODEL_ID = os.getenv("PACE_MODEL_ID", "Qwen/Qwen2.5-0.5B-Instruct")
+MODEL_ID = os.getenv("PACE_MODEL_ID", "Qwen/Qwen2.5-Coder-1.5B-Instruct")
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 TOKENIZER = AutoTokenizer.from_pretrained(MODEL_ID, trust_remote_code=False)
 MODEL = AutoModelForCausalLM.from_pretrained(MODEL_ID, trust_remote_code=False)
@@ -26,7 +26,7 @@ MODEL.eval()
 
 
 SYSTEM_PROMPTS = {
-    "coding": "Give clear, correct programming advice. Never claim code was executed or tested.",
+    "coding": "Generate coherent runnable code in fenced Markdown blocks, with each file labeled filename=... . Keep explanations brief and outside code blocks. On continuation requests, write ONLY the missing code following the provided tail; do not repeat completed code, headers, or imports. Never claim code was executed or tested.",
     "literacy": "Answer only from the provided excerpts. Say clearly when information is missing.",
 }
 
@@ -46,10 +46,10 @@ def _model_tokens(text: str, mode: str, budget: int) -> Iterator[str]:
         return_tensors="pt",
         truncation=False,
     ).to(DEVICE)
-    if inputs["input_ids"].shape[-1] > 3072:
-        raise gr.Error("Input exceeds the hosted model's 3072-token context budget; split the request.")
+    if inputs["input_ids"].shape[-1] > 4096:
+        raise gr.Error("Input exceeds the hosted model's 4096-token context budget; split the request.")
     streamer = TextIteratorStreamer(
-        TOKENIZER, skip_prompt=True, skip_special_tokens=True, timeout=5,
+        TOKENIZER, skip_prompt=True, skip_special_tokens=True, timeout=25,
     )
     failures: list[Exception] = []
 
@@ -132,16 +132,19 @@ def generate_cpu(text: str, mode: str, speed: str, max_new_tokens: int) -> Itera
         raise gr.Error("Unsupported workspace or generation mode")
     if not isinstance(text, str) or not 1 <= len(text) <= 12000:
         raise gr.Error("Invalid prompt length")
-    if not isinstance(max_new_tokens, int) or not 16 <= max_new_tokens <= 256:
+    if not isinstance(max_new_tokens, int) or not 16 <= max_new_tokens <= 1024:
         raise gr.Error("Invalid token budget")
+    budget = min(512, max(max_new_tokens, 384 if mode == "coding" else 16))
     snapshot = ""
-    for piece in _cpu_tokens(text, mode, max_new_tokens):
+    for piece in _cpu_tokens(text, mode, budget):
         snapshot += piece
         if speed == "fast":
             yield snapshot
     if not snapshot.strip():
         raise gr.Error("CPU model returned no response")
-    if len(TOKENIZER.encode(snapshot, add_special_tokens=False)) >= max_new_tokens - 4:
+    if len(TOKENIZER.encode(snapshot, add_special_tokens=False)) >= budget - 4:
+        if speed == "pro":
+            yield snapshot  # Preserve draft for the browser continuation path.
         raise gr.Error("CPU output reached the token limit; request continuation in the app")
     if speed == "pro":
         prompt = (
@@ -149,17 +152,18 @@ def generate_cpu(text: str, mode: str, speed: str, max_new_tokens: int) -> Itera
             "Be explicit when uncertain.\\nQUESTION:\\n" + text
             + "\\nDRAFT:\\n" + snapshot
         )
-        revised = "".join(_cpu_tokens(prompt, mode, max_new_tokens)).strip()
+        revised = "".join(_cpu_tokens(prompt, mode, budget)).strip()
         if not revised:
             raise gr.Error("CPU review failed")
-        if len(TOKENIZER.encode(revised, add_special_tokens=False)) >= max_new_tokens - 4:
+        if len(TOKENIZER.encode(revised, add_special_tokens=False)) >= budget - 4:
             raise gr.Error("CPU review reached the token limit; request continuation")
         yield revised
 
 def duration_for(text: str, mode: str, speed: str, max_new_tokens: int) -> int:
     # Sized conservatively for a 0.5B model; benchmark representative requests
     # and tune for the actual Space hardware/visitor GPU quota.
-    return 55 if speed == "pro" else 35
+    tokens = max(max_new_tokens, 512 if mode == "coding" else 16)
+    return min(120, max(40, int(tokens * (0.11 if speed == "pro" else 0.07)) + 30))
 
 
 @spaces.GPU(duration=duration_for)
@@ -168,18 +172,21 @@ def generate(text: str, mode: str, speed: str, max_new_tokens: int) -> Iterator[
         raise gr.Error("Unsupported workspace or generation mode")
     if not isinstance(text, str) or not 1 <= len(text) <= 12000:
         raise gr.Error("Invalid prompt length")
-    if not isinstance(max_new_tokens, int) or not 16 <= max_new_tokens <= 256:
+    if not isinstance(max_new_tokens, int) or not 16 <= max_new_tokens <= 1024:
         raise gr.Error("Invalid token budget")
 
+    budget = max(max_new_tokens, 512 if mode == "coding" else 16)
     snapshot = ""
-    for piece in _model_tokens(text, mode, max_new_tokens):
+    for piece in _model_tokens(text, mode, budget):
         snapshot += piece
         if speed == "fast":
             yield snapshot
     if not snapshot.strip():
         raise gr.Error("The AI model returned no response")
 
-    if len(TOKENIZER.encode(snapshot, add_special_tokens=False)) >= max_new_tokens - 4:
+    if len(TOKENIZER.encode(snapshot, add_special_tokens=False)) >= budget - 4:
+        if speed == "pro":
+            yield snapshot  # A partial draft is better than silent failure.
         raise gr.Error("Hosted output reached the token limit; request continuation")
     if speed == "pro":
         critique_prompt = (
@@ -187,10 +194,10 @@ def generate(text: str, mode: str, speed: str, max_new_tokens: int) -> Iterator[
             "If facts cannot be verified, state the uncertainty.\n\n"
             "QUESTION:\n" + text + "\n\nDRAFT:\n" + snapshot
         )
-        revision = "".join(_model_tokens(critique_prompt, mode, max_new_tokens)).strip()
+        revision = "".join(_model_tokens(critique_prompt, mode, budget)).strip()
         if not revision:
             raise gr.Error("Review was incomplete")
-        if len(TOKENIZER.encode(revision, add_special_tokens=False)) >= max_new_tokens - 4:
+        if len(TOKENIZER.encode(revision, add_special_tokens=False)) >= budget - 4:
             raise gr.Error("Hosted review reached the token limit; request continuation")
         yield revision
 
@@ -201,7 +208,7 @@ with gr.Blocks(title="PACE AI Service") as demo:
         prompt = gr.Textbox(label="Prompt", lines=4)
         mode = gr.Dropdown(list(SYSTEM_PROMPTS), value="coding", label="Workspace")
         speed = gr.Dropdown(["fast", "pro"], value="fast", label="Generation mode")
-        budget = gr.Slider(16, 256, value=128, step=16, label="Max output tokens")
+        budget = gr.Slider(16, 1024, value=512, step=16, label="Max output tokens")
     response = gr.Textbox(label="Model response", lines=12)
     gr.Button("Generate").click(
         generate, [prompt, mode, speed, budget], response,
