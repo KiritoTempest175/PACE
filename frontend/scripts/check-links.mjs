@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
-const allowed=new Set(['/','/dashboard','/coding','/literacy','/models','/settings','/docs','/privacy']);
-const files=['src/App.jsx','src/components/InfoPages.jsx','src/components/ModelsPage.jsx','index.html'];
+const allowed=new Set(['/','/dashboard','/coding','/literacy','/docs','/privacy']);
+const files=['src/App.jsx','src/components/InfoPages.jsx','index.html'];
 const href=/\bhref=["']([^"']+)["']/g;
 let links=0;const failures=[];
 for(const f of files){const text=fs.readFileSync(path.join(process.cwd(),f),'utf8');for(const match of text.matchAll(href)){const url=match[1];links++;if(url.startsWith('/')&&!allowed.has(url)&&!fs.existsSync(path.join('public',url.slice(1))))failures.push(f+': '+url);if(url.startsWith('javascript:'))failures.push(f+': unsafe link');}}
