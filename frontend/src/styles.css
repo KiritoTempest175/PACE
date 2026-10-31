@@ -247,3 +247,6 @@ body{background:var(--canvas);color:var(--text)}
 .code-verification-note{font-size:11px!important;line-height:1.6;margin:12px 0 0}
 .generated-empty-result{padding:15px;border:1px dashed #4b3d5c;border-radius:10px;color:#c5bbd4;font-size:12px;line-height:1.7}
 .generated-empty-result .button{margin-top:8px}
+
+.selected-request-card{margin:12px 0 0;background:#1a1422;border-color:#4b365b}
+.selected-request-card p{max-height:145px;overflow:auto}
