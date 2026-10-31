@@ -5,6 +5,7 @@ import {createPythonRun} from './lib/pythonRunner.js';
 import {InfoPage,Footer,BrandLogo} from './components/InfoPages.jsx';
 import CodeResponse from './components/CodeResponse.jsx';
 import {parseGeneratedResponse} from './lib/parseGeneratedResponse.js';
+import {codingTurns} from './lib/codingTurns.js';
 import {generateLongCode} from './lib/longCode.js';
 import {json,wakeServer,streamAnswer} from './lib/api.js';
 
@@ -22,6 +23,7 @@ function App(){
  const [conversations,setConversations]=useState([]);
  const [activeId,setActiveId]=useState(null);
  const [messages,setMessages]=useState([]);
+ const [selectedTurnOffset,setSelectedTurnOffset]=useState(0);
  const [text,setText]=useState('');
  const [busy,setBusy]=useState(false);
  const [loadingHistory,setLoadingHistory]=useState(false);
@@ -62,12 +64,12 @@ function App(){
  };
  const stopLocalPython=()=>pythonRunRef.current?.cancel();
 
- const openConversation=async item=>{if(busy)return;setLoadingHistory(true);setActiveId(item.id);setWorkspace(item.workspace==='research'?'coding':item.workspace);setSidebarOpen(false);try{const res=await json(`/conversations/${encodeURIComponent(item.id)}`);setMessages(res.messages||[]);setDocument(res.document_id?{document_id:res.document_id,displayName:'Saved PDF context'}:null);}catch(e){setError(e.message);}finally{setLoadingHistory(false);}};
- const newChat=()=>{if(busy)return;setActiveId(null);setMessages([]);setDocument(null);setError('');setSidebarOpen(false);inputRef.current?.focus();};
+ const openConversation=async item=>{if(busy)return;setLoadingHistory(true);setActiveId(item.id);setWorkspace(item.workspace==='research'?'coding':item.workspace);setSidebarOpen(false);try{const res=await json(`/conversations/${encodeURIComponent(item.id)}`);setMessages(res.messages||[]);setSelectedTurnOffset(0);setDocument(res.document_id?{document_id:res.document_id,displayName:'Saved PDF context'}:null);}catch(e){setError(e.message);}finally{setLoadingHistory(false);}};
+ const newChat=()=>{if(busy)return;setActiveId(null);setMessages([]);setSelectedTurnOffset(0);setDocument(null);setError('');setSidebarOpen(false);inputRef.current?.focus();};
  const clearAllData=async()=>{if(!window.confirm('Delete your PACE session conversations and PDF text from the connected backend?'))return;try{await json('/my-data',{method:'DELETE'});setConversations([]);setMessages([]);setActiveId(null);setDocument(null);localStorage.removeItem('pace.session.v2');setNotice('Session conversations and PDF text deleted from the connected API.');}catch(e){setError('Deletion failed: '+e.message);}};
  const send=async e=>{
   e?.preventDefault?.();if(busy||!text.trim())return;
-  const value=text.trim();setText('');setError('');setBusy(true);setIncomplete(false);setStage('actor');
+  const value=text.trim();setText('');setSelectedTurnOffset(0);setError('');setBusy(true);setIncomplete(false);setStage('actor');
   const user={role:'user',text:value,id:'local-'+Date.now()};
   const assistantId='reply-'+Date.now();
   setMessages(prev=>[...prev,user,{id:assistantId,role:'assistant',text:''}]);
@@ -99,7 +101,10 @@ function App(){
  const uploadPdf=async file=>{if(!file)return;if(!file.name.toLowerCase().endsWith('.pdf')||file.size>8*1024*1024){setError('Select a PDF smaller than 8 MB.');return;}setUploading(true);setError('');try{const data=new FormData();data.append('file',file);const outcome=await json('/upload',{method:'POST',body:data});setDocument({...outcome,displayName:file.name});setNotice('Document processed. You can now ask questions about it.');}catch(e){setError(e.message);}finally{setUploading(false);if(fileRef.current)fileRef.current.value='';}};
  const removeChat=async item=>{if(!window.confirm('Delete this conversation?'))return;try{await json(`/conversations/${encodeURIComponent(item.id)}`,{method:'DELETE'});if(item.id===activeId)newChat();await refreshList();}catch(e){setError(e.message);}};
  const activeWorkspace=WORKSPACES.find(w=>w.id===workspace) || {label:({dashboard:'Dashboard',docs:'Docs',privacy:'Privacy','not-found':'404'})[workspace]||'Dashboard',description:'System overview',Icon:LayoutDashboard};
- const unfinishedCode=workspace==='coding'&&!busy&&parseGeneratedResponse(messages.filter(m=>m.role==='assistant').at(-1)?.text||'').files.some(f=>f.incomplete);
+ const turns=workspace==='coding'?codingTurns(messages):[];
+ const selectedCodingTurn=turns[Math.max(0,turns.length-1-selectedTurnOffset)]||null;
+ const parsedCodingResponse=parseGeneratedResponse(selectedCodingTurn?.response||'');
+ const unfinishedCode=workspace==='coding'&&!busy&&parsedCodingResponse.files.some(f=>f.incomplete);
  const navigate=page=>{window.history.pushState(null,'',page==='dashboard'?'/':'/'+page);setWorkspace(page);setSidebarOpen(false);setError('');};
  const goDashboard=()=>navigate('dashboard');
  return <div className="app-shell">
@@ -158,15 +163,47 @@ function App(){
    {['docs','privacy','not-found'].includes(workspace)&&<InfoPage page={workspace} onNavigate={navigate}/>}
    {workspace==='privacy'&&<section className="privacy-controls card"><div><h3>Session data controls</h3><p>Delete conversation history and stored PDF text for this browser session from the connected API.</p></div><Button variant="secondary" disabled={online!=='online'} onClick={clearAllData}>Delete session data</Button></section>}
    <div className={['coding','literacy'].includes(workspace)?'workspace-stage'+(workspace==='coding'?' is-coding':''):'workspace-empty'}>
-   {workspace!=='dashboard'&&['coding','literacy'].includes(workspace)&&<section className="conversation" aria-label={workspace==='coding'?'AI explanation panel':'Conversation panel'}><div className="conversation-content">{workspace==='coding'&&<h2 className="explanation-heading">AI explanation</h2>}
-    {loadingHistory?<div className="history-loading"><Skeleton/><Skeleton width="75%"/><Skeleton width="90%"/></div>:messages.length===0?<div className="empty-state"><div className="empty-icon"><activeWorkspace.Icon size={23}/></div><h2>Start with {activeWorkspace.label.toLowerCase()}</h2><p>{activeWorkspace.description}. Responses require a configured, available AI service.</p>{workspace==='literacy'&&<p>Ask anything, or upload a PDF for document-grounded answers.</p>}{online!=='online'&&<div className="connect-hint"><WifiOff size={16}/><span>The API may be sleeping on Render.</span><Button size="sm" variant="secondary" onClick={()=>setBoot(x=>x+1)}>Retry connection</Button></div>}</div>:<div className="message-list" role="log" aria-live="polite" aria-relevant="additions text">{messages.map((m,i)=><article className={`message ${m.role==='user'?'is-user':''}`} key={m.id||i}><div className="avatar" aria-hidden="true">{m.role==='user'?'Y':'P'}</div><div className="message-body"><strong>{m.role==='user'?'You':'PACE'}</strong>{m.role==='assistant'?<><CodeResponse mode={workspace==='coding'?'explanation':'both'} text={m.text||(busy?'Generating response…':'')}/>{m.incomplete&&<p className="inline-error">Response interrupted. Use Continue to request the missing portion.</p>}</>:<p>{m.text}</p>}</div></article>)}<div ref={scrollRef}/></div>}
+   {workspace==='coding'&&<section className="conversation" aria-label="AI explanation panel">
+     <div className="conversation-content">
+       <h2 className="explanation-heading">AI explanation</h2>
+       {loadingHistory?<div className="history-loading"><Skeleton/><Skeleton width="75%"/><Skeleton width="90%"/></div>:
+       !selectedCodingTurn?<div className="empty-state"><div className="empty-icon"><Code2 size={23}/></div><h2>Ask PACE to write code</h2><p>Submit a programming request. The explanation and generated source will appear in separate panels.</p>{online!=='online'&&<div className="connect-hint"><WifiOff size={16}/> The API may be waking up. <Button size="sm" variant="secondary" onClick={()=>setBoot(x=>x+1)}>Retry</Button></div>}</div>:
+       <div className="focused-result">
+         {turns.length>1&&<div className="turn-navigation" aria-label="Coding request history">
+           <button type="button" onClick={()=>setSelectedTurnOffset(v=>Math.min(v+1,turns.length-1))} disabled={selectedTurnOffset>=turns.length-1} aria-label="Previous coding request">Previous</button>
+           <span>Request {turns.length-selectedTurnOffset} of {turns.length}</span>
+           <button type="button" onClick={()=>setSelectedTurnOffset(v=>Math.max(0,v-1))} disabled={selectedTurnOffset===0} aria-label="Next coding request">Next</button>
+         </div>}
+         <div className="focus-request"><strong>Your request</strong><p>{selectedCodingTurn.request}</p></div>
+         <div className="focus-explanation">
+           {selectedCodingTurn.response?<CodeResponse text={selectedCodingTurn.response} mode="explanation"/>:
+             <p className="muted">{busy?'Generating code…':'No completed response was saved for this request.'}</p>}
+           {selectedCodingTurn.incomplete&&<p className="inline-error">Generation was interrupted. Code may be incomplete.</p>}
+         </div>
+       </div>}
+     </div>
+   </section>}
+   {workspace==='literacy'&&<section className="conversation" aria-label="Conversation panel"><div className="conversation-content">
+     {loadingHistory?<div className="history-loading"><Skeleton/><Skeleton width="75%"/><Skeleton width="90%"/></div>:
+      messages.length===0?<div className="empty-state"><div className="empty-icon"><BookOpen size={23}/></div><h2>Start with literacy</h2><p>Ask general questions or use a PDF for document-grounded answers.</p></div>:
+      <div className="message-list" role="log" aria-live="polite" aria-relevant="additions text">{messages.map((m,i)=><article className={`message ${m.role==='user'?'is-user':''}`} key={m.id||i}>
+        <div className="avatar" aria-hidden="true">{m.role==='user'?'Y':'P'}</div>
+        <div className="message-body"><strong>{m.role==='user'?'You':'PACE'}</strong>{m.role==='assistant'?<CodeResponse text={m.text||(busy?'Generating response…':'')}/>:<p>{m.text}</p>}</div>
+       </article>)}<div ref={scrollRef}/></div>}
    </div></section>}
    {workspace==='coding'&&<aside className="generated-panel" aria-label="Generated code panel">
-     <header className="generated-panel-header"><Code2 size={17}/><h2>Generated code</h2><span>Separate from AI explanation</span></header>
-     <div className="generated-panel-scroll">
-       {!messages.some(m=>m.role==='assistant'&&m.text)?<p className="muted generated-placeholder">Generated files will appear here after PACE responds. Copy or download code independently.</p>:
-       messages.filter(m=>m.role==='assistant'&&m.text).slice(-3).reverse().map((m,i)=><section key={m.id||i} className="generated-reply"><span className="generated-reply-label">Latest response {i+1}</span><CodeResponse text={m.text} mode="code"/>{m.incomplete&&<p className="inline-error">Incomplete generation — review before using.</p>}</section>)}
-     </div>
+      <header className="generated-panel-header"><Code2 size={17}/><h2>Generated code</h2><span>For the selected request only</span></header>
+      <div className="generated-panel-scroll">
+       {!selectedCodingTurn||!selectedCodingTurn.response?<p className="muted generated-placeholder">{busy?'Generating source code…':'Generated files will appear here after you submit a request.'}</p>:
+        parsedCodingResponse.files.length?<section className="generated-reply">
+           <CodeResponse text={selectedCodingTurn.response} mode="code"/>
+           {(selectedCodingTurn.incomplete||parsedCodingResponse.files.some(f=>f.incomplete))&&<p className="inline-error">This code is incomplete. Do not run it without reviewing and completing it.</p>}
+           <p className="muted code-verification-note">AI-generated code has not been executed or verified by PACE.</p>
+         </section>:
+         <div className="generated-empty-result"><p>No usable code was returned for this request. A model review is not proof that the code works.</p>
+           <Button variant="secondary" size="sm" onClick={()=>{setText(selectedCodingTurn.request);inputRef.current?.focus();}}>Retry this request</Button>
+         </div>}
+      </div>
    </aside>}
    {['coding','literacy'].includes(workspace)&&<div className="composer-wrap">{error&&<div className="inline-error" role="alert">{error}<button onClick={()=>setError('')} aria-label="Dismiss error"><X size={16}/></button></div>}
     {workspace==='literacy'&&<div className="document-row">{document?<><FileText size={16}/><span title={document.displayName}>{document.displayName}</span><Badge tone="success">Ready</Badge><Button variant="ghost" size="sm" onClick={async()=>{try{await json(`/documents/${document.document_id}`,{method:'DELETE'});}catch{}setDocument(null);}} aria-label="Remove document"><X size={16}/></Button></>:<span className="muted">No document selected.</span>}<input ref={fileRef} type="file" accept=".pdf,application/pdf" hidden onChange={e=>uploadPdf(e.target.files?.[0])}/><Button variant="secondary" size="sm" disabled={uploading||busy} onClick={()=>fileRef.current?.click()}><Upload size={14}/>{uploading?'Uploading…':'Upload PDF'}</Button></div>}
