@@ -1,3 +1,4 @@
+import {IS_PACE_DESKTOP} from './desktopApi.js';
 function endpoint(model){
  let base=model.baseUrl.trim().replace(/\/$/,'');
  if(!base){
@@ -8,6 +9,15 @@ function endpoint(model){
  return url.toString().replace(/\/$/,'');
 }
 export async function providerReply(model,question,{signal}={}){
+ if(IS_PACE_DESKTOP){
+   if(signal?.aborted)throw new Error('Request cancelled');
+   const invoke=window.__TAURI__?.core?.invoke;
+   if(typeof invoke!=='function')throw new Error('Desktop native provider is unavailable');
+   return invoke('desktop_provider_request',{request:{
+     credentialId:model.id,provider:model.provider,modelId:model.modelId,
+     baseUrl:model.baseUrl||'',prompt:question
+   }});
+ }
  if(!model.key)throw new Error('Add an API key in Models before sending a request.');
  const base=endpoint(model);
  const common={'Content-Type':'application/json'};
