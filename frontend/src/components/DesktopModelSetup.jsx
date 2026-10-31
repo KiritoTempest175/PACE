@@ -99,7 +99,7 @@ export function DesktopModelSetup({open,onClose,onChanged,onOpenProviders,firstR
   </div>;}
   return <Modal title={firstRun?'Welcome to PACE Desktop':'Local AI & model setup'} open={open} onClose={onClose}>
     <div className="model-setup desktop-onboarding" aria-live="polite">
-      <div className="desktop-welcome-banner"><img src="/pace-monogram.svg" width="68" height="68" alt="PACE logo"/><div><p className="eyebrow">PACE / PERSONAL AI WORKSPACE</p><h3>${firstRun?'Set up your experience':'Your model workspace'}</h3><p>Private local intelligence, or your choice of external AI provider.</p></div></div>
+      <div className="desktop-welcome-banner"><img src="/pace-monogram.svg" width="68" height="68" alt="PACE logo"/><div><p className="eyebrow">PACE / PERSONAL AI WORKSPACE</p><h3>{firstRun?'Set up your experience':'Your model workspace'}</h3><p>Private local intelligence, or your choice of external AI provider.</p></div></div>
       {firstRun&&<section className="onboarding-personalize"><h3>1. Choose your appearance</h3><p className="small muted">You can change this at any time in Preferences.</p><div className="setup-appearance">{['dark','light','system'].map(option=><button key={option} className={theme.preference===option?'selected':''} onClick={()=>theme.setPreference(option)} type="button">{option==='system'?'Follow device':option==='dark'?'Dark':'Light'}</button>)}</div></section>}
       <div className="model-setup-divider"/>
       <h3>2. Choose how PACE thinks</h3>
