@@ -177,7 +177,7 @@ function App(){
          
          <div className="focus-explanation">
            {selectedCodingTurn.response?<CodeResponse text={selectedCodingTurn.response} mode="explanation"/>:
-             <p className="muted">{busy?'Generating code…':'No completed response was saved for this request.'}</p>}
+             <p className="muted">{busy?'Generating code…':selectedCodingTurn.unverifiedReview?'The model returned an unsupported correctness claim. No code was tested or verified.':'No usable response was returned for this request.'}</p>}
            {selectedCodingTurn.incomplete&&<p className="inline-error">Generation was interrupted. Code may be incomplete.</p>}
          </div>
        </div>}
@@ -194,7 +194,7 @@ function App(){
    {workspace==='coding'&&<aside className="generated-panel" aria-label="Generated code panel">
       <header className="generated-panel-header"><Code2 size={17}/><h2>Generated code</h2><span>For the selected request only</span></header>
       <div className="generated-panel-scroll">
-       {!selectedCodingTurn||!selectedCodingTurn.response?<p className="muted generated-placeholder">{busy?'Generating source code…':'Generated files will appear here after you submit a request.'}</p>:
+       {!selectedCodingTurn?<p className="muted generated-placeholder">Generated files will appear here after you submit a request.</p>:!selectedCodingTurn.response?<div className="generated-empty-result"><p>{busy?'Generating source code…':'No usable code was returned. No program has been verified.'}</p>{!busy&&<Button variant="secondary" size="sm" onClick={()=>{setText(selectedCodingTurn.request);inputRef.current?.focus();}}>Retry this request</Button>}</div>:
         parsedCodingResponse.files.length?<section className="generated-reply">
            <CodeResponse text={selectedCodingTurn.response} mode="code"/>
            {(selectedCodingTurn.incomplete||parsedCodingResponse.files.some(f=>f.incomplete))&&<p className="inline-error">This code is incomplete. Do not run it without reviewing and completing it.</p>}
