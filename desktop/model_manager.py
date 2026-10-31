@@ -282,6 +282,15 @@ def install_ollama():
             if done<100_000 or header!=b"MZ":
                 raise RuntimeError("Invalid Windows installer content")
             os.replace(temporary,destination)
+            # Reject altered or unsigned installers before launching native code.
+            escaped = str(destination).replace("'", "''")
+            check = subprocess.run(
+                ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command",
+                 "(Get-AuthenticodeSignature -LiteralPath '" + escaped + "').Status.ToString()"],
+                capture_output=True, text=True, timeout=30, check=False,
+            )
+            if check.returncode != 0 or check.stdout.strip() != "Valid":
+                raise RuntimeError("Windows did not verify the Ollama installer signature")
             subprocess.Popen([str(destination)],close_fds=True)
             yield _frame({"type":"installer_opened",
                           "message":"Complete Ollama's Windows installer, then return to PACE."})
