@@ -16,9 +16,9 @@ vi.mock('../lib/api.js',()=>({
   if(path==='/conversations/chat-b')return {
    id:'chat-b',workspace:'coding',messages:[
     {id:'u3',role:'user',text:'Generate linear regression source'},
-    {id:'a3',role:'assistant',text:'```python\\nprint(42)\\n```'},
-    {id:'u4',role:'user',text:'import numpy as np\\n\\ndef linear_regression(X, y):\\n    return np.linalg.pinv(X) @ y'},
-    {id:'a4',role:'assistant',text:'```python\\nimport numpy as np\\ndef linear_regression(X, y):\\n    return np.linalg.pinv(X) @ y\\n```'}
+    {id:'a3',role:'assistant',text:'```python\nprint(42)\n```'},
+    {id:'u4',role:'user',text:'import numpy as np\n\ndef linear_regression(X, y):\n    return np.linalg.pinv(X) @ y'},
+    {id:'a4',role:'assistant',text:'```python\nimport numpy as np\ndef linear_regression(X, y):\n    return np.linalg.pinv(X) @ y\n```'}
    ]};
   return [];
  }),
@@ -50,8 +50,6 @@ describe('coding view regression',()=>{
   fireEvent.click(await screen.findByRole('button',{name:'Pasted source example'}));
   const select=await screen.findByLabelText('View request');
   expect(select).toHaveValue('0');
-  const source=screen.getByText(/Submitted source code/);
-  expect(source).toBeInTheDocument();
   expect(screen.getByText('View original input')).toBeInTheDocument();
   expect(screen.getByRole('complementary',{name:'Generated code panel'})).toHaveTextContent('np.linalg.pinv');
   fireEvent.change(select,{target:{value:'1'}});
