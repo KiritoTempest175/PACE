@@ -30,7 +30,7 @@ def _request(prompt: str, mode: str, role: str = "actor") -> Iterator[str]:
         raise AIUnavailable("Invalid local Ollama configuration")
     system = {
         "coding": "Write complete executable code. Do not claim execution or testing.",
-        "literacy": "Answer only from supplied excerpts; state when evidence is insufficient.",
+        "literacy": "Answer general questions. When document excerpts are provided, ground claims in them and say when evidence is insufficient.",
     }[mode]
     payload = {
         "model": desktop_role_model(role) or settings.ollama_model,
