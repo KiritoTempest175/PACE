@@ -41,6 +41,8 @@ export function DesktopModelSetup({open,onClose,onChanged,onOpenProviders,firstR
   const [progress,setProgress]=useState(null);
   const [error,setError]=useState('');
   const [info,setInfo]=useState('');
+  const [localPreferences,setLocalPreferences]=useState({context_tokens:8192,temperature:0.2});
+  const [preferencesPath,setPreferencesPath]=useState('');
   const [discovered,setDiscovered]=useState([]);
   const [scanning,setScanning]=useState(false);
   const reload=useCallback(async()=>{
@@ -51,6 +53,7 @@ export function DesktopModelSetup({open,onClose,onChanged,onOpenProviders,firstR
     onChanged?.(next);
     return next;
   },[onChanged]);
+  useEffect(()=>{if(!open)return;json('/desktop/setup/preferences').then(data=>{setLocalPreferences(data.preferences);setPreferencesPath(data.file);}).catch(()=>{});},[open]);
   useEffect(()=>{if(!open)return;let alive=true;json('/desktop/setup/status').then(s=>{
     if(!alive)return;setStatus(s);if(s.selected.actor)setActor(s.selected.actor);if(s.selected.critic)setCritic(s.selected.critic);
   }).catch(e=>alive&&setError(e.message));return()=>{alive=false;};},[open]);
@@ -81,6 +84,7 @@ export function DesktopModelSetup({open,onClose,onChanged,onOpenProviders,firstR
     await readSetupStream('/desktop/setup/import',{role:importChoice,path:file.path},setProgress);
     setInfo(file.name+' imported into your local Ollama library. The original file remains on your computer.');
   });
+  const savePrefs=()=>execute('prefs',async()=>{const data=await json('/desktop/setup/preferences',{method:'POST',body:localPreferences});setPreferencesPath(data.file);setInfo('Local generation settings saved. They apply to your next model response.');});
   const scan=async()=>{setScanning(true);setError('');try{const result=await json('/desktop/setup/scan');setDiscovered(result.models||[]);setInfo('Local file scan completed. Direct file inference is not verified.');}catch(e){setError(e.message);}finally{setScanning(false);}};
   const models=status?.catalog||[];
   const installed=new Set(status?.installed_models||[]);
@@ -113,6 +117,7 @@ export function DesktopModelSetup({open,onClose,onChanged,onOpenProviders,firstR
       </div>}
       {loaded&&<Button variant="secondary" size="sm" disabled={Boolean(task)} onClick={()=>execute('refresh',reload)}>Refresh installed models</Button>}
       {loaded&&<><div className="model-setup-divider"/>{picker('actor',actor,setActor)}<div className="model-setup-divider"/>{picker('critic',critic,setCritic)}</>}
+      <div className="model-setup-divider"/><section className="setup-generation-preferences"><h3>Generation preferences</h3><p className="small muted">A higher context can use considerably more RAM or VRAM. Automatic output length lets Ollama stop at the model's natural stopping point.</p><div className="setup-action-row"><label className="field"><span>Context size</span><select value={localPreferences.context_tokens} onChange={e=>setLocalPreferences(p=>({...p,context_tokens:Number(e.target.value)}))}>{[2048,4096,8192,16384,32768].map(v=><option key={v} value={v}>{v.toLocaleString()} tokens</option>)}</select></label><label className="field"><span>Creativity</span><select value={localPreferences.temperature} onChange={e=>setLocalPreferences(p=>({...p,temperature:Number(e.target.value)}))}><option value={0}>Focused</option><option value={0.2}>Balanced</option><option value={0.7}>Creative</option><option value={1}>Very creative</option></select></label><Button disabled={Boolean(task)} variant="secondary" onClick={savePrefs}>Save settings</Button></div><p className="small muted">Settings file: <code>{preferencesPath||'Your PACE local-data folder/generation-preferences.json'}</code></p></section>
       <div className="model-setup-divider"/><section><h3>3. Use models already on your PC</h3><p className="small muted">Read-only scan of Ollama, LM Studio, Hugging Face and familiar model folders. PACE never uploads these files. Compatible GGUF models can be imported into Ollama after your confirmation; other formats are shown for reference.</p><div className="setup-action-row"><Button size="sm" variant="secondary" disabled={scanning||Boolean(task)} onClick={scan}>{scanning?'Scanning local folders…':'Scan this PC for models'}</Button><label className="field model-import-role"><span>Import as</span><select value={importChoice} onChange={e=>setImportChoice(e.target.value)}><option value="actor">Generator</option><option value="critic">Reviewer</option></select></label></div>{discovered.length===0&&<p className="small muted">Select Scan to find compatible downloaded models.</p>}{discovered.slice(0,50).map(m=><div className="discovered-model" key={m.path}><div><strong>{m.name}</strong><p className="small muted">{m.format.toUpperCase()} · {m.size_gb} GB · {m.quantization}</p><small title={m.path}>{m.path}</small></div><Button size="sm" variant="secondary" disabled={!loaded||Boolean(task)||m.format!=='gguf'} onClick={()=>importGGUF(m)}>{m.format==='gguf'?'Import into Ollama':'Reference only'}</Button></div>)}</section>
       {loaded&&actor===critic&&<p className="small muted">Two different models give an independent model-based second pass. The same model can be selected for both roles, but does not provide independent review.</p>}
       {task&&<div role="status"><p className="small">{task==='install'?'Downloading official Ollama setup':task==='start'?'Starting Ollama':task==='refresh'?'Checking Ollama':task==='import'?'Importing your model locally':'Downloading or selecting model'} — {progress?.status||'please wait'}</p>{percentage!==null&&<progress max="100" value={percentage}>{percentage}%</progress>}{progress?.completed>0&&<span className="small muted"> {fmt(progress.completed)} {progress.total?'of '+fmt(progress.total):''}</span>}</div>}
