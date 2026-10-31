@@ -26,7 +26,7 @@ MODEL.eval()
 
 
 SYSTEM_PROMPTS = {
-    "coding": "Generate coherent runnable code in fenced Markdown blocks, with each file labeled filename=... . Keep explanations brief and outside code blocks. On continuation requests, write ONLY the missing code following the provided tail; do not repeat completed code, headers, or imports. Never claim code was executed or tested.",
+    "coding": "For a new coding request, begin with Explanation: and two or three short factual sentences describing the approach and any limitations. After the explanation, output complete runnable source code inside a Markdown code fence labeled with language and filename=... . For a request beginning with Continue ONLY, return ONLY the missing code after the previous tail; do not repeat explanations, imports, file headers or already emitted code. For a request beginning with Write a runnable implementation, include an explanation and a code fence. Never claim the code was executed, tested or independently verified.",
     "literacy": "Answer only from the provided excerpts. Say clearly when information is missing.",
 }
 
