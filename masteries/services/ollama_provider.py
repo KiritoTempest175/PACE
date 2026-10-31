@@ -36,7 +36,7 @@ def _request(prompt: str, mode: str, role: str = "actor") -> Iterator[str]:
         "model": desktop_role_model(role) or settings.ollama_model,
         "messages": [{"role": "system", "content": system}, {"role": "user", "content": prompt}],
         "stream": True,
-        "options": {"num_predict": settings.max_new_tokens},
+        "options": {"num_predict": -1 if os.environ.get("PACE_DESKTOP_DATA_DIR") else settings.max_new_tokens},
     }
     try:
         with httpx.Client(timeout=httpx.Timeout(connect=5, read=settings.ai_timeout_seconds, write=10, pool=5)) as client:
@@ -77,7 +77,7 @@ def _overlap(previous: str, continuation: str) -> int:
 def _complete(prompt: str, mode: str, role: str = "actor") -> Iterator[str]:
     settings = get_settings()
     full = ""
-    for attempt in range(settings.max_continuation_rounds + 1):
+    for attempt in range(64 if os.environ.get('PACE_DESKTOP_DATA_DIR') else settings.max_continuation_rounds + 1):
         # Keep the first pass streaming. Buffer subsequent rounds to dedupe boundaries.
         pieces = []
         iterator = _request(prompt, mode, role)
@@ -97,9 +97,11 @@ def _complete(prompt: str, mode: str, role: str = "actor") -> Iterator[str]:
             full += fresh
             if fresh:
                 yield fresh
+            elif reason == "length":
+                raise AIUnavailable("The model repeated itself and made no progress. Review its available context.")
         if reason != "length" and full.count("```") % 2 == 0:
             return
-        if attempt >= settings.max_continuation_rounds:
+        if attempt >= (63 if os.environ.get('PACE_DESKTOP_DATA_DIR') else settings.max_continuation_rounds):
             raise AIUnavailable("Generation reached the configured continuation limit; request Continue in the app")
         context_tail = full[-5000:]
         prompt = (
