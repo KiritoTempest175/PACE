@@ -6,7 +6,7 @@ import base64
 from io import BytesIO
 from pathlib import Path
 import re
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageChops
 
 ROOT = Path(__file__).resolve().parents[1] / "frontend" / "src-tauri"
 LOGO = ROOT / "icons" / "icon-source.svg"
@@ -17,7 +17,13 @@ def load_logo() -> Image.Image:
     match = re.search(r"data:image/(?:png|webp);base64,([A-Za-z0-9+/=]+)", raw)
     if not match:
         raise RuntimeError("PACE logo data not embedded in icon-source.svg")
-    return Image.open(BytesIO(base64.b64decode(match.group(1)))).convert("RGBA")
+    result=Image.open(BytesIO(base64.b64decode(match.group(1)))).convert("RGBA")
+    red,green,blue,_=result.split()
+    brightness=ImageChops.lighter(ImageChops.lighter(red,green),blue)
+    # Source WebP has a black canvas; restore transparency like the SVG's filter.
+    alpha=brightness.point(lambda v: 0 if v<=10 else 255 if v>=55 else int((v-10)*255/45))
+    result.putalpha(alpha)
+    return result
 
 def build(size: tuple[int,int], name: str) -> None:
     w,h = size
