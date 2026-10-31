@@ -46,7 +46,7 @@ describe('bounded long-code streaming',()=>{
   const sender=vi.fn(async (body,emit)=>{
    count++;
    emit({type:'init',conversation_id:'chat-review'});
-   emit({type:'token',content:count===1?'The code is correct and does not contain any errors.':'```python\\nprint(42)\\n```'});
+   emit({type:'token',content:count===1?'The code is correct and does not contain any errors.':'```python\nprint(42)\n```'});
    emit({type:'done'});
   });
   const result=await generateLongCode({text:'generate code for linear regression',mode:'coding',speed_mode:'pro'},e=>events.push(e),undefined,{send:sender});
