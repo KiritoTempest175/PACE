@@ -5,7 +5,8 @@ import {createPythonRun} from './lib/pythonRunner.js';
 import {InfoPage,Footer,BrandLogo} from './components/InfoPages.jsx';
 import CodeResponse from './components/CodeResponse.jsx';
 import {parseGeneratedResponse} from './lib/parseGeneratedResponse.js';
-import {codingTurns} from './lib/codingTurns.js';
+import {codingTurns,isLikelyCodeInput} from './lib/codingTurns.js';
+import {codeOverview} from './lib/codeOverview.js';
 import {generateLongCode} from './lib/longCode.js';
 import {json,wakeServer,streamAnswer} from './lib/api.js';
 
@@ -169,14 +170,12 @@ function App(){
        {loadingHistory?<div className="history-loading"><Skeleton/><Skeleton width="75%"/><Skeleton width="90%"/></div>:
        !selectedCodingTurn?<div className="empty-state"><div className="empty-icon"><Code2 size={23}/></div><h2>Ask PACE to write code</h2><p>Submit a programming request. The explanation and generated source will appear in separate panels.</p>{online!=='online'&&<div className="connect-hint"><WifiOff size={16}/> The API may be waking up. <Button size="sm" variant="secondary" onClick={()=>setBoot(x=>x+1)}>Retry</Button></div>}</div>:
        <div className="focused-result">
-         {turns.length>1&&<div className="turn-navigation" aria-label="Coding request history">
-           <button type="button" onClick={()=>setSelectedTurnOffset(v=>Math.min(v+1,turns.length-1))} disabled={selectedTurnOffset>=turns.length-1} aria-label="Previous coding request">Previous</button>
-           <span>Request {turns.length-selectedTurnOffset} of {turns.length}</span>
-           <button type="button" onClick={()=>setSelectedTurnOffset(v=>Math.max(0,v-1))} disabled={selectedTurnOffset===0} aria-label="Next coding request">Next</button>
-         </div>}
-         
+
          <div className="focus-explanation">
-           {selectedCodingTurn.response?<CodeResponse text={selectedCodingTurn.response} mode="explanation"/>:
+           {selectedCodingTurn.response?(parsedCodingResponse.explanation?
+              <CodeResponse text={selectedCodingTurn.response} mode="explanation"/>:
+              parsedCodingResponse.files.length?<div className="code-overview"><h3>Code overview</h3><p>{codeOverview(parsedCodingResponse.files)}</p><p className="small muted">This summary is derived from the source text. The model did not provide a written explanation, and the code has not been tested.</p></div>:
+              <p className="muted">No usable AI explanation was provided.</p>):
              <p className="muted">{busy?'Generating code…':selectedCodingTurn.unverifiedReview?'The model returned an unsupported correctness claim. No code was tested or verified.':'No usable response was returned for this request.'}</p>}
            {selectedCodingTurn.incomplete&&<p className="inline-error">Generation was interrupted. Code may be incomplete.</p>}
          </div>
@@ -207,7 +206,10 @@ function App(){
    </aside>}
    {['coding','literacy'].includes(workspace)&&<div className="composer-wrap">{error&&<div className="inline-error" role="alert">{error}<button onClick={()=>setError('')} aria-label="Dismiss error"><X size={16}/></button></div>}
     {workspace==='literacy'&&<div className="document-row">{document?<><FileText size={16}/><span title={document.displayName}>{document.displayName}</span><Badge tone="success">Ready</Badge><Button variant="ghost" size="sm" onClick={async()=>{try{await json(`/documents/${document.document_id}`,{method:'DELETE'});}catch{}setDocument(null);}} aria-label="Remove document"><X size={16}/></Button></>:<span className="muted">No document selected.</span>}<input ref={fileRef} type="file" accept=".pdf,application/pdf" hidden onChange={e=>uploadPdf(e.target.files?.[0])}/><Button variant="secondary" size="sm" disabled={uploading||busy} onClick={()=>fileRef.current?.click()}><Upload size={14}/>{uploading?'Uploading…':'Upload PDF'}</Button></div>}
-    <form className="composer" onSubmit={send}><label htmlFor="prompt" className="sr-only">Message PACE</label><textarea id="prompt" ref={inputRef} value={text}  disabled={busy} onChange={e=>setText(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send(e);}}} placeholder={workspace==='literacy'?'Ask anything, or ask about your PDF…':'Describe a coding task…'} rows={3}/><div className="composer-actions">{busy&&<Badge tone="warning">{speed.toUpperCase()} · {stage==='critic'?'Critic reviewing':stage.startsWith('section')?('Generating '+stage):'Actor drafting'}</Badge>}<Tabs label="Model mode" items={[{value:'fast',label:'Fast'},{value:'pro',label:'Review'}]} value={speed} onChange={setSpeed}/><div className="composer-actions-right"><span className="small muted">{text.length} characters</span><Button type="submit" disabled={busy||online!=='online'||!text.trim()} aria-label="Send message">{busy?<LoaderCircle size={18} className="spin"/>:<ArrowUp size={18}/>}</Button></div></div></form>{workspace==='coding'&&selectedCodingTurn&&<div className="focus-request selected-request-card"><strong>Selected request</strong><p>{selectedCodingTurn.request}</p></div>}{(incomplete||unfinishedCode)&&<div className="runner-actions"><Button variant="secondary" onClick={()=>{setText('Continue the unfinished code from exactly where it stopped. Output only the missing next section. Original task: '+(selectedCodingTurn?.request||'preceding coding task').slice(0,1100)+String.fromCharCode(10,10)+'PREVIOUS OUTPUT TAIL:'+String.fromCharCode(10)+(selectedCodingTurn?.response||'').slice(-950));inputRef.current?.focus();setIncomplete(false);}}>Continue</Button></div>}<p className="composer-footnote">AI output may contain mistakes. Review mode may reuse the same model; it is not independently verified.</p>
+    <form className="composer" onSubmit={send}><label htmlFor="prompt" className="sr-only">Message PACE</label><textarea id="prompt" ref={inputRef} value={text}  disabled={busy} onChange={e=>setText(e.target.value)} onKeyDown={e=>{if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send(e);}}} placeholder={workspace==='literacy'?'Ask anything, or ask about your PDF…':'Describe a coding task…'} rows={3}/><div className="composer-actions">{busy&&<Badge tone="warning">{speed.toUpperCase()} · {stage==='critic'?'Critic reviewing':stage.startsWith('section')?('Generating '+stage):'Actor drafting'}</Badge>}<Tabs label="Model mode" items={[{value:'fast',label:'Fast'},{value:'pro',label:'Review'}]} value={speed} onChange={setSpeed}/><div className="composer-actions-right"><span className="small muted">{text.length} characters</span><Button type="submit" disabled={busy||online!=='online'||!text.trim()} aria-label="Send message">{busy?<LoaderCircle size={18} className="spin"/>:<ArrowUp size={18}/>}</Button></div></div></form>{workspace==='coding'&&turns.length>1&&<div className="request-history-control"><label htmlFor="coding-request-history">View request</label><select id="coding-request-history" value={selectedTurnOffset} onChange={e=>setSelectedTurnOffset(Number(e.target.value))}>{turns.map((turn,i)=><option value={turns.length-1-i} key={turn.id}>{i+1}. {isLikelyCodeInput(turn.request)?'Submitted source code':turn.request.replace(/\\s+/g,' ').slice(0,68)}</option>)}</select></div>}
+    {workspace==='coding'&&selectedCodingTurn&&(isLikelyCodeInput(selectedCodingTurn.request)?
+       <details className="selected-request-card submitted-source"><summary>Submitted source code <span>View original input</span></summary><pre>{selectedCodingTurn.request}</pre></details>:
+       <div className="focus-request selected-request-card"><strong>Your request</strong><p>{selectedCodingTurn.request}</p></div>)}{(incomplete||unfinishedCode)&&<div className="runner-actions"><Button variant="secondary" onClick={()=>{setText('Continue the unfinished code from exactly where it stopped. Output only the missing next section. Original task: '+(selectedCodingTurn?.request||'preceding coding task').slice(0,1100)+String.fromCharCode(10,10)+'PREVIOUS OUTPUT TAIL:'+String.fromCharCode(10)+(selectedCodingTurn?.response||'').slice(-950));inputRef.current?.focus();setIncomplete(false);}}>Continue</Button></div>}<p className="composer-footnote">AI output may contain mistakes. Review mode may reuse the same model; it is not independently verified.</p>
    </div>}
    </div>
    <Footer onNavigate={navigate}/>
