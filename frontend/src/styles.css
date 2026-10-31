@@ -250,3 +250,17 @@ body{background:var(--canvas);color:var(--text)}
 
 .selected-request-card{margin:12px 0 0;background:#1a1422;border-color:#4b365b}
 .selected-request-card p{max-height:145px;overflow:auto}
+
+/* Coding workbench — compact history in the prompt column, no duplicated source. */
+.request-history-control{display:flex;flex-direction:column;gap:7px;margin:12px 0 0;color:#c8b9d4;font-size:11px}
+.request-history-control label{font-size:10px;letter-spacing:.07em;text-transform:uppercase}
+.request-history-control select{width:100%;min-height:38px;background:#1b1624;color:#f1eaf5;border:1px solid #4d3b60;border-radius:9px;padding:7px 10px;cursor:pointer}
+.submitted-source{margin-top:12px;overflow:hidden;border:1px solid #493454;background:#181421;border-radius:11px}
+.submitted-source summary{display:flex;align-items:center;justify-content:space-between;gap:12px;cursor:pointer;padding:13px;color:#d8b8f5;font-size:12px;font-weight:600;list-style:none}
+.submitted-source summary::-webkit-details-marker{display:none}
+.submitted-source summary span{font-size:10px;font-weight:400;color:#aca0bd}
+.submitted-source[open] summary{border-bottom:1px solid #3c3048}
+.submitted-source pre{padding:14px;max-height:240px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;color:#e2dcea;font:11px/1.7 ui-monospace,monospace;margin:0}
+.code-overview h3{color:#f1eafa;font-size:12px;font-weight:650;margin:0 0 11px}
+.code-overview p{margin:0 0 12px!important;line-height:1.8}
+.code-overview .small{font-size:11px!important;color:#ada0bc;opacity:.9}
