@@ -82,6 +82,13 @@ jobs:
             sha256sum --check SHA256SUMS.txt
           )
           ls -lh release/
+      - name: Keep downloadable complete release bundle if GitHub blocks publication
+        uses: actions/upload-artifact@v4
+        with:
+          name: PACE-Desktop-v0.5.0-rc1-Complete-Release-Bundle
+          path: release/*
+          if-no-files-found: error
+          retention-days: 30
       - name: Publish public pre-release after validating all assets
         env:
           GH_TOKEN: ${{ github.token }}
