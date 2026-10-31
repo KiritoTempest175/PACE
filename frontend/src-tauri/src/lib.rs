@@ -5,6 +5,7 @@ use std::{net::TcpListener, sync::Mutex};
 use tauri::{Manager, State, WindowEvent};
 use tauri_plugin_shell::{process::CommandChild, ShellExt};
 use uuid::Uuid;
+mod providers;
 
 struct BackendState {
     endpoint: String,
@@ -27,7 +28,7 @@ fn desktop_backend_info(state: State<'_, BackendState>) -> BackendInfo {
 }
 
 
-fn credential_entry(id: &str) -> Result<keyring::Entry, String> {
+pub(super) fn credential_entry(id: &str) -> Result<keyring::Entry, String> {
     if id.is_empty() || id.len() > 128 || !id.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'-' || c == b'_') {
         return Err("Invalid credential identifier".into());
     }
@@ -45,15 +46,6 @@ fn desktop_store_key(model_id: String, secret: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn desktop_read_key(model_id: String) -> Result<Option<String>, String> {
-    match credential_entry(&model_id)?.get_password() {
-        Ok(secret) => Ok(Some(secret)),
-        Err(keyring::Error::NoEntry) => Ok(None),
-        Err(_) => Err("Could not read OS keychain".into()),
-    }
-}
-
-#[tauri::command]
 fn desktop_delete_key(model_id: String) -> Result<(), String> {
     match credential_entry(&model_id)?.delete_credential() {
         Ok(()) | Err(keyring::Error::NoEntry) => Ok(()),
@@ -61,11 +53,18 @@ fn desktop_delete_key(model_id: String) -> Result<(), String> {
     }
 }
 
+#[tauri::command]
+fn desktop_data_location(app: tauri::AppHandle) -> Result<String, String> {
+    app.path().app_local_data_dir()
+        .map(|path| path.display().to_string())
+        .map_err(|_| "Could not find desktop data directory".to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
-        .invoke_handler(tauri::generate_handler![desktop_backend_info, desktop_store_key, desktop_read_key, desktop_delete_key])
+        .invoke_handler(tauri::generate_handler![desktop_backend_info, desktop_store_key, desktop_delete_key, desktop_data_location, providers::desktop_provider_request, providers::desktop_has_key, providers::desktop_credential_location])
         .setup(|app| {
             let app_data = app.path().app_local_data_dir()?;
             std::fs::create_dir_all(&app_data)?;
