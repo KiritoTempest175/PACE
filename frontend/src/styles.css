@@ -44,3 +44,47 @@
 .response-content{min-width:0;max-width:100%;overflow-wrap:anywhere}.response-content p{white-space:pre-wrap}
 .sidebar button:focus-visible,.pace-code-head button:focus-visible{outline:2px solid var(--pace-cyan)}
 @media(max-width:700px){.models-form{grid-template-columns:1fr}.pace-code-head{flex-wrap:wrap}.info-page{padding:20px}.pace-footer{padding:18px 12px}.main-panel{min-width:0}}
+
+/* Desktop-only welcome, model library and workbench improvements. */
+.desktop-onboarding .desktop-welcome-banner{display:flex;align-items:center;gap:16px;padding:18px;border:1px solid #51356b;border-radius:15px;background:linear-gradient(115deg,#130f1c,#251633 60%,#102731);color:#f1eff6}
+.desktop-welcome-banner h3{font-size:20px;line-height:1.2;margin:2px 0 7px}
+.desktop-welcome-banner .eyebrow{color:#bba5ef;font-size:10px;font-weight:700;letter-spacing:.15em}
+.desktop-welcome-banner p{margin:0;font-size:12px}
+.onboarding-personalize{padding:14px 0}
+.onboarding-personalize h3,.model-setup>h3{font-size:15px;margin:0 0 9px}
+.setup-appearance{display:flex;flex-wrap:wrap;gap:9px}
+.setup-appearance button{background:#14111d;border:1px solid #4c395d;border-radius:9px;color:#e7dced;padding:9px 15px;cursor:pointer}
+.setup-appearance button.selected{border-color:#00f0ff;box-shadow:0 0 0 1px #00f0ff44;color:#f5fbff}
+.discovered-model{display:flex;align-items:center;justify-content:space-between;gap:15px;padding:10px;margin:9px 0;border:1px solid #3b334a;border-radius:11px;background:#181520}
+.discovered-model strong{font-size:12px}.discovered-model p{margin:3px 0;font-size:11px}.discovered-model small{display:block;max-width:420px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#9b92aa}
+.model-import-role{min-width:145px}.model-import-role select{background:#13101b;color:#e8e2f1;border:1px solid #544060;border-radius:7px;padding:8px}
+.workspace-stage.is-desktop-coding{max-width:none;display:grid;grid-template-columns:minmax(260px,.85fr) minmax(270px,1fr) minmax(320px,1.25fr);gap:15px}
+.workspace-stage.is-desktop-coding .composer-wrap{grid-column:1;grid-row:1;min-width:0}
+.workspace-stage.is-desktop-coding .conversation{grid-column:2;grid-row:1;min-width:0}
+.workspace-stage.is-desktop-coding .generated-panel{grid-column:3;grid-row:1;min-width:0}
+.desktop-panel-title{margin:0 0 16px;border-bottom:1px solid #41384d;padding-bottom:14px;font-size:14px}
+.generated-panel{min-height:460px;height:65vh;display:flex;flex-direction:column;overflow:hidden;background:#16141e;border:1px solid #40364d;border-radius:13px}
+.generated-panel-header{display:flex;align-items:center;gap:10px;padding:15px;border-bottom:1px solid #40364d;color:#cb93ee}
+.generated-panel-header h2{font-size:13px;margin:0;color:#f4eff7}.generated-panel-header span{margin-left:auto;font-size:10px;color:#a79eb5}
+.generated-panel-scroll{flex:1;overflow:auto;padding:14px;min-height:0}
+.desktop-selected-request{margin-top:11px;padding:13px;background:#20192b;border:1px solid #493452;border-radius:10px}
+.desktop-selected-request strong{font-size:11px;color:#d6b5f7}
+.desktop-selected-request p{margin:8px 0 0;white-space:pre-wrap;max-height:160px;overflow:auto;overflow-wrap:anywhere;font-size:12px}
+.desktop-selected-source{margin-top:11px;background:#1a1524;border:1px solid #493452;border-radius:10px;padding:10px}
+.desktop-selected-source summary{font-size:12px;cursor:pointer;color:#d6b5f7}
+.desktop-selected-source pre{max-height:180px;overflow:auto;white-space:pre-wrap;font-size:11px}
+.desktop-request-history{margin-top:11px}
+.code-overview h3{font-size:12px;margin:0 0 10px}.code-overview p{font-size:12px;line-height:1.8}
+@media(max-width:1250px) and (min-width:691px){
+ .workspace-stage.is-desktop-coding{grid-template-columns:minmax(240px,.85fr) minmax(300px,1.15fr)}
+ .workspace-stage.is-desktop-coding .composer-wrap{grid-column:1;grid-row:1}
+ .workspace-stage.is-desktop-coding .conversation{grid-column:2;grid-row:1}
+ .workspace-stage.is-desktop-coding .generated-panel{grid-column:1/-1;grid-row:2;min-height:300px;height:500px}
+}
+@media(max-width:690px){
+ .workspace-stage.is-desktop-coding{display:flex;flex-direction:column}
+ .workspace-stage.is-desktop-coding .composer-wrap{order:0}
+ .workspace-stage.is-desktop-coding .conversation{order:1;min-height:220px}
+ .workspace-stage.is-desktop-coding .generated-panel{order:2;min-height:260px;height:auto;max-height:460px}
+ .desktop-welcome-banner{flex-wrap:wrap}.discovered-model{flex-direction:column;align-items:stretch}
+}
