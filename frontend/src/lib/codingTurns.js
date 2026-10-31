@@ -34,6 +34,13 @@ export function codingTurns(messages=[]) {
   }else if(message.role==='assistant'&&turn){
    const text=message.text||'';
    if(!text.trim())continue;
+   // A model may report "the code is correct" without having tested anything.
+   // Treat unsupported verdict-only responses as an error, not an explanation.
+   if(!parseGeneratedResponse(text).files.length
+     &&/\b(?:the|this)\s+code\s+(?:is\s+correct|has\s+no\s+errors|does\s+not\s+contain\s+any\s+errors)\b/i.test(text)){
+    turn.unverifiedReview=true;
+    continue;
+   }
    // A follow-up that only claims that code is correct is not a code segment.
    if(continuation&&turn.response&&parseGeneratedResponse(turn.response).files.length
      &&!parseGeneratedResponse(text).files.length
