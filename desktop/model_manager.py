@@ -65,6 +65,49 @@ def _save_selection(data: dict[str, str | None]) -> None:
     finally:
         temporary.unlink(missing_ok=True)
 
+
+def _preferences_file() -> Path:
+    return _root() / "generation-preferences.json"
+
+def read_preferences() -> dict:
+    saved = {"context_tokens": 8192, "temperature": 0.2}
+    try:
+        data = json.loads(_preferences_file().read_text(encoding="utf-8"))
+        if isinstance(data, dict):
+            context = data.get("context_tokens")
+            temp = data.get("temperature")
+            if isinstance(context, int) and context in (2048,4096,8192,16384,32768):
+                saved["context_tokens"] = context
+            if isinstance(temp,(int,float)) and 0 <= temp <= 2:
+                saved["temperature"] = float(temp)
+    except (OSError,ValueError,TypeError):
+        pass
+    return saved
+
+class LocalPreferences(BaseModel):
+    context_tokens: int = 8192
+    temperature: float = 0.2
+
+@router.get("/preferences")
+def current_preferences():
+    return {"preferences": read_preferences(), "file": str(_preferences_file())}
+
+@router.post("/preferences")
+def update_preferences(req: LocalPreferences):
+    if req.context_tokens not in (2048,4096,8192,16384,32768) or not 0 <= req.temperature <= 2:
+        raise HTTPException(422, "Select a supported context and temperature")
+    target=_preferences_file()
+    target.parent.mkdir(parents=True,exist_ok=True)
+    with tempfile.NamedTemporaryFile(mode="w",encoding="utf-8",dir=target.parent,
+                                     prefix=".prefs-",suffix=".tmp",delete=False) as handle:
+        temp=Path(handle.name)
+        json.dump(req.model_dump(),handle)
+    try:
+        os.replace(temp,target)
+    finally:
+        temp.unlink(missing_ok=True)
+    return {"preferences": read_preferences(), "file": str(target)}
+
 def installed_models() -> list[str]:
     try:
         with httpx.Client(timeout=3) as client:
