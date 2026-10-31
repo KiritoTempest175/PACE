@@ -1,4 +1,4 @@
-name: Publish tested PACE Desktop v0.4
+name: Publish tested PACE Desktop v0.5.0 RC1
 on:
   push:
     branches: [feature/tauri-desktop]
@@ -6,72 +6,97 @@ on:
 permissions:
   contents: write
   actions: read
+concurrency:
+  group: pace-desktop-rc1
+  cancel-in-progress: false
 jobs:
   release:
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 25
     steps:
-      - name: Download exact tested Windows build
-        uses: actions/download-artifact@v4
+      - uses: actions/checkout$v4
         with:
-          name: PACE-Desktop-Windows-and-Source
-          run-id: 37972608175
-          repository: KiritoTempest175/PACE
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-          path: files
-      - name: Verify Windows installer, web runtime and source assets
+          fetch-depth: 0
+      - name: Require exact successful native-build commit
+        id: tested
+        env:
+          GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          test -s 'files/frontend/src-tauri/target/release/bundle/nsis/PACE AI Workspaces_0.4.0_x64-setup.exe'
-          for name in PACE_Web_Source.zip PACE_Web_Deploy_Bundle.zip PACE_Desktop_Source.zip PACE_Complete_Source.zip; do
-            test -s "files/$name"
+          SHA="$(sed -n 's/^source_sha=//p' .github/desktop-publish.request | head -n1)"
+          TAG="$(sed -n 's/^tag=//p' .github/desktop-publish.request | head -n1)"
+          [[ "$SHA" =~ ^[a-f0-9]{40}$ ]] || { echo "::error::Invalid source SHA"; exit 1; }
+          test "$TAG" = desktop-v0.5.0-rc1
+          git cat-file -e "$SHA^{commit}"
+          RUN="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/desktop-native-ci.yml/runs?branch=feature%2Ftauri-desktop&per_page=100" --jq '.workflow_runs[] | select(.head_sha == "'"$SHA"'" and .conclusion == "success") | .id' | head -n1)"
+          test -n "$RUN" || { echo "::error::No successful 3-platform native build for $SHA"; exit 1; }
+          echo "source_sha=$SHA" >> "$GITHUB_OUTPUT"
+          echo "run_id=$RUN" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+      - name: Download Windows, macOS and Linux assets from one tested run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ steps.tested.outputs.run_id }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          gh run download "$RUN_ID" -R "$GITHUB_REPOSITORY" -D artifacts --pattern 'pace-desktop-*-unsigned'
+          find artifacts -type f -printf '%p (%s bytes)\n'
+      - name: Validate installers and prepare checksums and source ZIP
+        env:
+          SOURCE_SHA: ${{ steps.tested.outputs.source_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          mapfile -d '' WIN < <(find artifacts -type f -iname '*.exe' -print0)
+          mapfile -d '' MAC < <(find artifacts -type f -iname '*.dmg' -print0)
+          mapfile -d '' DEB < <(find artifacts -type f -iname '*.deb' -print0)
+          mapfile -d '' APP < <(find artifacts -type f -iname '*.AppImage' -print0)
+          test "${#WIN[$]}" -eq 1 || { echo "::error::Expected one Windows EXE"; exit 1; }
+          test "${#MAC[$]}" -eq 1 || { echo "::error::Expected one macOS DMG"; exit 1; }
+          test "${#DEB[$]}" -eq 1 || { echo "::error::Expected one Linux DEB"; exit 1; }
+          for file in "${WIN[0]}" "${MAC[0]}" "${DEB[0]}"; do
+            test "$(stat -c %s "$file")" -gt 1000000
+            cp "$file" "release/$(basename "$file")"
           done
-          python - <<'PY'
-          import zipfile
-          p='files/PACE_Web_Deploy_Bundle.zip'
-          with zipfile.ZipFile(p) as z:
-              for name in ['index.html','python-runner.worker.js','pyodide/pyodide.asm.wasm','pyodide/python_stdlib.zip']:
-                  assert z.getinfo(name).file_size>(100 if name=='index.html' else 1000),name
-          print('Five assets verified, including offline Python runtime')
-          PY
-      - name: Create draft release and upload verified artifacts
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PACE_RELEASE_TOKEN: ${{ secrets.PACE_RELEASE_TOKEN }}
-          SOURCE_SHA: b898aef640f1248750e6f325b24660d28f62735a
-        run: |
-          set -euo pipefail
-          tag='desktop-v0.4.0'
-          if ! gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            echo 'Creating GitHub Release with GitHub Actions token'
-            if ! gh release create "$tag" --repo "$GITHUB_REPOSITORY" --target "$SOURCE_SHA" --draft --title 'PACE Desktop v0.4.0 — Python Runner' --notes 'Tauri Windows app with bundled FastAPI, Ollama setup, and working offline Python 3 WebAssembly runner in Coding. Includes web deployment ZIP and all source archives. No server-side code execution. Prerelease; do not run untrusted code.'; then
-              if [ -z "$PACE_RELEASE_TOKEN" ]; then echo '::error::GitHub denied release creation and fallback token is missing.'; exit 1; fi
-              echo 'Retrying GitHub Release creation with repository-scoped release token'
-              GH_TOKEN="$PACE_RELEASE_TOKEN" gh release create "$tag" --repo "$GITHUB_REPOSITORY" --target "$SOURCE_SHA" --draft --title 'PACE Desktop v0.4.0 — Python Runner' --notes 'Working Python 3 WebAssembly runner for web and desktop. FastAPI and Ollama setup preserved. Includes deploy-ready site and editable sources.'
-            fi
-          fi
-          assets=(
-            'files/frontend/src-tauri/target/release/bundle/nsis/PACE AI Workspaces_0.4.0_x64-setup.exe'
-            'files/PACE_Web_Deploy_Bundle.zip'
-            'files/PACE_Web_Source.zip'
-            'files/PACE_Desktop_Source.zip'
-            'files/PACE_Complete_Source.zip'
+          for file in "${APP[$]}"; do
+            if test "$(stat -c %s "$file")" -gt 1000000; then cp "$file" "release/$(basename "$file")"; fi
+          done
+          cp desktop/RELEASE_NOTES_v0.5.0-rc1.md release/RELEASE_NOTES.md
+          cp desktop/README_LOCAL.md release/INSTALLATION.md
+          git archive --format=zip --output=release/PACE_Desktop_Source_v0.5.0-rc1.zip "$SOURCE_SHA" frontend desktop backend core masteries LICENSE README.md
+          (
+            cd release
+            find . -maxdepth 1 -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS.txt
+            sha256sum --check SHA256SUMS.txt
           )
-          if ! gh release upload "$tag" --repo "$GITHUB_REPOSITORY" "${assets[@]}" --clobber; then
-            if [ -z "$PACE_RELEASE_TOKEN" ]; then exit 1; fi
-            GH_TOKEN="$PACE_RELEASE_TOKEN" gh release upload "$tag" --repo "$GITHUB_REPOSITORY" "${assets[@]}" --clobber
-          fi
-          gh release view "$tag" --repo "$GITHUB_REPOSITORY" --json assets,isDraft,tagName
-      - name: Publish tested installer as public prerelease
+          ls -lh release/
+      - name: Publish public pre-release after validating all assets
         env:
           GH_TOKEN: ${{ github.token }}
           PACE_RELEASE_TOKEN: ${{ secrets.PACE_RELEASE_TOKEN }}
+          SOURCE_SHA: ${{ steps.tested.outputs.source_sha }}
         shell: bash
         run: |
           set -euo pipefail
-          if ! gh release edit desktop-v0.4.0 --repo "$GITHUB_REPOSITORY" --draft=false --prerelease; then
-            GH_TOKEN="$PACE_RELEASE_TOKEN" gh release edit desktop-v0.4.0 --repo "$GITHUB_REPOSITORY" --draft=false --prerelease
+          TAG=desktop-v0.5.0-rc1
+          if gh release view "$TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "::error::Tag exists; refusing to overwrite a prior release"
+            exit 1
           fi
-          gh release view desktop-v0.4.0 --repo "$GITHUB_REPOSITORY" --json isDraft,isPrerelease,url,assets
+          make_release() {
+            gh release create "$TAG" release/* -R "$GITHUB_REPOSITORY" --target "$SOURCE_SHA" --draft --prerelease --title 'PACE Desktop v0.5.0 RC1 — Local-first AI and branded setup' --notes-file desktop/RELEASE_NOTES_v0.5.0-rc1.md
+          }
+          if ! make_release; then
+            test -n "$PACE_RELEASE_TOKEN" || exit 1
+            GH_TOKEN="$PACE_RELEASE_TOKEN" make_release
+          fi
+          NUM="$(gh release view "$TAG" -R "$GITHUB_REPOSITORY" --json assets --jq '.assets | length')"
+          test "$NUM" -ge 7 || { echo "::error::Incomplete release assets; kept as draft"; exit 1; }
+          if ! gh release edit "$TAG" -R "$GITHUB_REPOSITORY" --draft=false --prerelease; then
+            test -n "$PACE_RELEASE_TOKEN" || exit 1
+            GH_TOKEN="$PACE_RELEASE_TOKEN" gh release edit "$TAG" -R "$GITHUB_REPOSITORY" --draft=false --prerelease
+          fi
+          gh release view "$TAG" -R "$GITHUB_REPOSITORY" --json url,isDraft,isPrerelease,tagName,assets
