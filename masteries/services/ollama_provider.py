@@ -32,11 +32,16 @@ def _request(prompt: str, mode: str, role: str = "actor") -> Iterator[str]:
         "coding": "Write complete executable code. Do not claim execution or testing.",
         "literacy": "Answer general questions. When document excerpts are provided, ground claims in them and say when evidence is insufficient.",
     }[mode]
+    local_options = {}
+    if os.environ.get("PACE_DESKTOP_DATA_DIR"):
+        from desktop.model_manager import read_preferences
+        prefs = read_preferences()
+        local_options = {"num_ctx": prefs["context_tokens"], "temperature": prefs["temperature"]}
     payload = {
         "model": desktop_role_model(role) or settings.ollama_model,
         "messages": [{"role": "system", "content": system}, {"role": "user", "content": prompt}],
         "stream": True,
-        "options": {"num_predict": -1 if os.environ.get("PACE_DESKTOP_DATA_DIR") else settings.max_new_tokens},
+        "options": {"num_predict": -1 if os.environ.get("PACE_DESKTOP_DATA_DIR") else settings.max_new_tokens, **local_options},
     }
     try:
         with httpx.Client(timeout=httpx.Timeout(connect=5, read=settings.ai_timeout_seconds, write=10, pool=5)) as client:
