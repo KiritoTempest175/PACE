@@ -19,7 +19,7 @@ export default function CodeResponse({text='',mode='both'}) {
  const showExplanation=mode!=='code';
  const showCode=mode!=='explanation';
  return <div className="response-content">
-  {showExplanation&&(explanation?<p>{explanation}</p>:mode==='explanation'?<p className="muted">{files.length?'Code is displayed in the Generated code panel.':'Waiting for an AI explanation…'}</p>:null)}
+  {showExplanation&&(explanation?<p>{explanation}</p>:mode==='explanation'?<p className="muted">{files.length?'The model did not include a written explanation.':'Waiting for a response…'}</p>:null)}
   {showCode&&(files.length?files.map((file,i)=><CodeBlock key={i} lang={file.language} filename={file.filename} code={file.code} incomplete={file.incomplete}/>):mode==='code'?<p className="muted">No code artifact in this reply yet.</p>:null)}
  </div>;
 }
