@@ -27,6 +27,13 @@ describe('coding workbench request grouping',()=>{
   expect(turns[0].response).not.toContain('code is correct');
   expect(turns[0].response).toContain('LinearRegression');
  });
+ it('does not present a false correctness verdict as verified output',()=>{
+  const turns=codingTurns([{role:'user',text:'Generate linear regression'},{
+   role:'assistant',text:'The code is correct and does not contain any errors.'
+  }]);
+  expect(turns[0].unverifiedReview).toBe(true);
+  expect(turns[0].response).toBe('');
+ });
  it('recognizes manual continuation from earlier web versions',()=>{
   expect(isInternalContinuation('Continue the unfinished code from exactly where it stopped.')).toBe(true);
   expect(isInternalContinuation('Continue exactly where the preceding response ended')).toBe(true);
