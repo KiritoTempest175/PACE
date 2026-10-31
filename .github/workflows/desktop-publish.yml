@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout$v4
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - name: Require exact successful native-build commit
@@ -54,14 +54,14 @@ jobs:
           mapfile -d '' MAC < <(find artifacts -type f -iname '*.dmg' -print0)
           mapfile -d '' DEB < <(find artifacts -type f -iname '*.deb' -print0)
           mapfile -d '' APP < <(find artifacts -type f -iname '*.AppImage' -print0)
-          test "${#WIN[$]}" -eq 1 || { echo "::error::Expected one Windows EXE"; exit 1; }
-          test "${#MAC[$]}" -eq 1 || { echo "::error::Expected one macOS DMG"; exit 1; }
-          test "${#DEB[$]}" -eq 1 || { echo "::error::Expected one Linux DEB"; exit 1; }
+          test "${#WIN[@]}" -eq 1 || { echo "::error::Expected one Windows EXE"; exit 1; }
+          test "${#MAC[@]}" -eq 1 || { echo "::error::Expected one macOS DMG"; exit 1; }
+          test "${#DEB[@]}" -eq 1 || { echo "::error::Expected one Linux DEB"; exit 1; }
           for file in "${WIN[0]}" "${MAC[0]}" "${DEB[0]}"; do
             test "$(stat -c %s "$file")" -gt 1000000
             cp "$file" "release/$(basename "$file")"
           done
-          for file in "${APP[$]}"; do
+          for file in "${APP[@]}"; do
             if test "$(stat -c %s "$file")" -gt 1000000; then cp "$file" "release/$(basename "$file")"; fi
           done
           cp desktop/RELEASE_NOTES_v0.5.0-rc1.md release/RELEASE_NOTES.md
