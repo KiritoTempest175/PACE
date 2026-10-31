@@ -148,16 +148,20 @@ def generate_cpu(text: str, mode: str, speed: str, max_new_tokens: int) -> Itera
         raise gr.Error("CPU output reached the token limit; request continuation in the app")
     if speed == "pro":
         prompt = (
-            "Review this draft for errors and return the corrected answer only. "
-            "Be explicit when uncertain.\\nQUESTION:\\n" + text
-            + "\\nDRAFT:\\n" + snapshot
+            ("Review the draft against the original task. Return the COMPLETE corrected "
+             "runnable source code in a fenced Markdown code block with filename. "
+             "Never answer only with a claim that the code is correct. "
+             if mode == "coding" else
+             "Review the draft for factual errors. If uncertain, state that uncertainty. ")
+            + "\\nQUESTION:\\n" + text + "\\nDRAFT:\\n" + snapshot
         )
         revised = "".join(_cpu_tokens(prompt, mode, budget)).strip()
         if not revised:
             raise gr.Error("CPU review failed")
         if len(TOKENIZER.encode(revised, add_special_tokens=False)) >= budget - 4:
             raise gr.Error("CPU review reached the token limit; request continuation")
-        yield revised
+        # A review verdict without source code is not a coding deliverable.
+        yield snapshot if mode == "coding" and "```" not in revised else revised
 
 def duration_for(text: str, mode: str, speed: str, max_new_tokens: int) -> int:
     # Sized conservatively for a 0.5B model; benchmark representative requests
@@ -190,16 +194,19 @@ def generate(text: str, mode: str, speed: str, max_new_tokens: int) -> Iterator[
         raise gr.Error("Hosted output reached the token limit; request continuation")
     if speed == "pro":
         critique_prompt = (
-            "Review the answer for mistakes. Return the corrected answer only. "
-            "If facts cannot be verified, state the uncertainty.\n\n"
-            "QUESTION:\n" + text + "\n\nDRAFT:\n" + snapshot
+            ("Review the draft against the original task and output the COMPLETE corrected "
+             "source code in one Markdown code fence with filename. "
+             "Never claim code is correct unless you actually execute tests (not available). "
+             "Do not output a mere verdict.\n\n" if mode == "coding" else
+             "Review the factual accuracy of the answer. State uncertainty explicitly.\n\n")
+            + "QUESTION:\n" + text + "\n\nDRAFT:\n" + snapshot
         )
         revision = "".join(_model_tokens(critique_prompt, mode, budget)).strip()
         if not revision:
             raise gr.Error("Review was incomplete")
         if len(TOKENIZER.encode(revision, add_special_tokens=False)) >= budget - 4:
             raise gr.Error("Hosted review reached the token limit; request continuation")
-        yield revision
+        yield snapshot if mode == "coding" and "```" not in revision else revision
 
 
 with gr.Blocks(title="PACE AI Service") as demo:
