@@ -11,6 +11,16 @@ export function isInternalContinuation(text='') {
    || value.startsWith('Continue exactly where the preceding response ended');
 }
 
+
+export function isLikelyCodeInput(text='') {
+ const lines=String(text).split(/\r?\n/).map(line=>line.trim()).filter(Boolean);
+ if(lines.length<3)return false;
+ const syntax=lines.filter(line=>
+  /^(?:import\s+|from\s+\S+\s+import\s+|def\s+\w+\s*\(|class\s+\w+|(?:const|let|var|function|return|if|for|while)\b|#include\s*<|public\s+class\b|fn\s+\w+|[{}]$|#\s|\/\/|[A-Za-z_]\w*\s*=\s*(?!\=))/.test(line) ||
+  /(?:\)\s*:\s*$|;\s*$|np\.\w+\(|print\s*\(|console\.log\()/.test(line));
+ return syntax.length>=2 && syntax.length/lines.length>=0.35;
+}
+
 export function removeOverlap(previous='', next='') {
  const older=String(previous);
  const incoming=String(next);
