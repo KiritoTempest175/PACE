@@ -28,7 +28,7 @@ fn desktop_backend_info(state: State<'_, BackendState>) -> BackendInfo {
 }
 
 
-pub(super) fn credential_entry(id: &str) -> Result<keyring::Entry, String> {
+pub(crate) fn credential_entry(id: &str) -> Result<keyring::Entry, String> {
     if id.is_empty() || id.len() > 128 || !id.bytes().all(|c| c.is_ascii_alphanumeric() || c == b'-' || c == b'_') {
         return Err("Invalid credential identifier".into());
     }
