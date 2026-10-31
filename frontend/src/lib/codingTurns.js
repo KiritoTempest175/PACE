@@ -1,0 +1,68 @@
+import {parseGeneratedResponse} from './parseGeneratedResponse.js';
+
+// The deployed backend currently stores every continuation as an ordinary
+// chat turn. Build a useful UI view without modifying or deleting stored data.
+export function isInternalContinuation(text='') {
+ const value=String(text).trim();
+ return value.startsWith('Write a runnable implementation for the following programming task.')
+   || value.startsWith('Continue ONLY the unfinished code in the previous output.')
+   || value.startsWith('Continue the exact same implementation, do not start over.')
+   || value.startsWith('Continue the unfinished code from exactly where it stopped.')
+   || value.startsWith('Continue exactly where the preceding response ended');
+}
+
+
+export function isLikelyCodeInput(text='') {
+ const lines=String(text).split(/\r?\n/).map(line=>line.trim()).filter(Boolean);
+ if(lines.length<3)return false;
+ const syntax=lines.filter(line=>
+  /^(?:import\s+|from\s+\S+\s+import\s+|def\s+\w+\s*\(|class\s+\w+|(?:const|let|var|function|return|if|for|while)\b|#include\s*<|public\s+class\b|fn\s+\w+|[{}]$|#\s|\/\/|[A-Za-z_]\w*\s*=\s*(?!\=))/.test(line) ||
+  /(?:\)\s*:\s*$|;\s*$|np\.\w+\(|print\s*\(|console\.log\()/.test(line));
+ return syntax.length>=2 && syntax.length/lines.length>=0.35;
+}
+
+export function removeOverlap(previous='', next='') {
+ const older=String(previous);
+ const incoming=String(next);
+ for(let size=Math.min(1600,older.length,incoming.length);size>=16;size--){
+  if(older.endsWith(incoming.slice(0,size)))return incoming.slice(size);
+ }
+ return incoming;
+}
+
+export function codingTurns(messages=[]) {
+ const turns=[];
+ let turn=null;
+ let continuation=false;
+ for(const message of messages){
+  if(message.role==='user'){
+   continuation=isInternalContinuation(message.text);
+   if(!continuation){
+    turn={id:message.id||'turn-'+turns.length,request:message.text||'',response:'',incomplete:false};
+    turns.push(turn);
+   }
+  }else if(message.role==='assistant'&&turn){
+   const text=message.text||'';
+   if(!text.trim())continue;
+   // A model may report "the code is correct" without having tested anything.
+   // Treat unsupported verdict-only responses as an error, not an explanation.
+   if(!parseGeneratedResponse(text).files.length
+     &&/\b(?:the|this)\s+code\s+(?:is\s+correct|has\s+no\s+errors|does\s+not\s+contain\s+any\s+errors)\b/i.test(text)){
+    turn.unverifiedReview=true;
+    continue;
+   }
+   // A follow-up that only claims that code is correct is not a code segment.
+   if(continuation&&turn.response&&parseGeneratedResponse(turn.response).files.length
+     &&!parseGeneratedResponse(text).files.length
+     &&!/^\s*(?:import |from |def |class |function |const |let |var |#include)/m.test(text))continue;
+   if(continuation&&turn.response&&!parseGeneratedResponse(turn.response).files.length
+     &&parseGeneratedResponse(text).files.length){
+    turn.response=text; // Replace earlier non-code reviewer commentary.
+   }else{
+    turn.response+=removeOverlap(turn.response,text);
+   }
+   turn.incomplete=Boolean(message.incomplete);
+  }
+ }
+ return turns;
+}
