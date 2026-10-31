@@ -232,3 +232,18 @@ body{background:var(--canvas);color:var(--text)}
 .dashboard-hero .hero-brand-art{position:absolute;z-index:0;right:0;top:-50px;width:300px;height:300px;object-fit:contain;mix-blend-mode:screen;opacity:.84;pointer-events:none}
 .dashboard-hero>.hero-kicker,.dashboard-hero>h2,.dashboard-hero>p,.dashboard-hero>.dashboard-actions{position:relative;z-index:1}
 @media(max-width:880px){.dashboard-hero .hero-brand-art{width:190px;height:190px;top:-8px;right:-22px;opacity:.28}}
+
+/* Keep one selected request and its response in focus. Historical prompts are
+   navigated explicitly instead of being duplicated in the explanation column. */
+.focused-result{display:flex;flex-direction:column;gap:16px;min-width:0}
+.turn-navigation{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:11px;color:var(--muted);padding:0 0 12px;border-bottom:1px solid var(--border)}
+.turn-navigation button{border:1px solid #4d4059;background:#241d2f;border-radius:7px;padding:7px 12px;color:#e8d8fa;font-size:11px;cursor:pointer}
+.turn-navigation button:disabled{opacity:.32;cursor:default}
+.focus-request{padding:14px;border-radius:11px;border:1px solid #433449;background:#241c2e;overflow-wrap:anywhere}
+.focus-request strong{font-size:11px;color:#d9acff}
+.focus-request p{font-size:13px!important;line-height:1.65;margin:8px 0 0;white-space:pre-wrap}
+.focus-explanation{padding:15px;border-radius:11px;background:#15131d;border:1px solid #383044;min-height:115px;overflow-wrap:anywhere}
+.focus-explanation .response-content p{font-size:13px;line-height:1.75;white-space:pre-wrap;margin:0}
+.code-verification-note{font-size:11px!important;line-height:1.6;margin:12px 0 0}
+.generated-empty-result{padding:15px;border:1px dashed #4b3d5c;border-radius:10px;color:#c5bbd4;font-size:12px;line-height:1.7}
+.generated-empty-result .button{margin-top:8px}
