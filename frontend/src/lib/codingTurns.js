@@ -4,7 +4,9 @@ import {parseGeneratedResponse} from './parseGeneratedResponse.js';
 // chat turn. Build a useful UI view without modifying or deleting stored data.
 export function isInternalContinuation(text='') {
  const value=String(text).trim();
- return value.startsWith('Continue the exact same implementation, do not start over.')
+ return value.startsWith('Write a runnable implementation for the following programming task.')
+   || value.startsWith('Continue ONLY the unfinished code in the previous output.')
+   || value.startsWith('Continue the exact same implementation, do not start over.')
    || value.startsWith('Continue the unfinished code from exactly where it stopped.')
    || value.startsWith('Continue exactly where the preceding response ended');
 }
