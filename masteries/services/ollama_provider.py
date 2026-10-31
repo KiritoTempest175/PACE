@@ -29,7 +29,7 @@ def _request(prompt: str, mode: str, role: str = "actor") -> Iterator[str]:
     if url.scheme not in ("http", "https") or not url.hostname or url.username or url.password:
         raise AIUnavailable("Invalid local Ollama configuration")
     system = {
-        "coding": "Write complete executable code. Do not claim execution or testing.",
+        "coding": "For new programming requests, give a short Explanation: of the approach, then complete runnable source code in a Markdown fence labeled with language and filename=... . For prompts beginning with Continue precisely, output only the missing code (no preface or repeated imports). Never claim execution, testing or independent verification.",
         "literacy": "Answer general questions. When document excerpts are provided, ground claims in them and say when evidence is insufficient.",
     }[mode]
     local_options = {}
