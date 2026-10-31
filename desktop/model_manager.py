@@ -7,6 +7,7 @@ import os
 import subprocess
 import tempfile
 from pathlib import Path
+from uuid import uuid4
 from threading import Lock
 from urllib.request import Request, urlopen
 import httpx
@@ -133,6 +134,58 @@ def _frame(event: dict) -> str:
 def scan_local_models():
     return {"models": scan_models(), "runtime": "Ollama available separately; direct file loading unsupported"}
 
+
+
+class LocalModelImport(BaseModel):
+    role: str
+    path: str
+
+@router.post("/import")
+def import_local_gguf(req: LocalModelImport):
+    """Import an explicitly selected, discovered GGUF into local Ollama.
+    No scan triggers execution, file modification, upload or model loading.
+    """
+    if req.role not in ("actor", "critic"):
+        raise HTTPException(422, "Choose generator or reviewer")
+    if not _running() or not _ollama_binary():
+        raise HTTPException(503, "Start Ollama before importing this model")
+    if not _lock.acquire(blocking=False):
+        raise HTTPException(409, "Another model download or import is in progress")
+    try:
+        file_path = Path(req.path).resolve(strict=True)
+        if not file_path.is_file() or file_path.suffix.lower() != ".gguf":
+            raise HTTPException(422, "Only a locally discovered GGUF file can be imported")
+        # User must choose a file found during the known-folder read-only scan.
+        # This avoids allowing arbitrary filesystem paths through the API.
+        if str(file_path) not in {str(Path(m["path"]).resolve()) for m in scan_models(limit=500)}:
+            raise HTTPException(403, "Model is outside the scanned model folders")
+        model_name = "pace-import-" + uuid4().hex[:12]
+        executable = _ollama_binary()
+        def events():
+            try:
+                yield _frame({"type":"progress","status":"Registering your GGUF with local Ollama","completed":0,"total":0})
+                with tempfile.TemporaryDirectory(dir=_root()) as folder:
+                    modelfile = Path(folder) / "Modelfile"
+                    modelfile.write_text('FROM "' + file_path.as_posix().replace('"', '') + '"\n',encoding="utf-8")
+                    completed = subprocess.run([str(executable), "create", model_name, "-f", str(modelfile)],
+                        capture_output=True, text=True, timeout=1800, check=False)
+                    if completed.returncode != 0:
+                        raise RuntimeError("Ollama could not import this model; check its compatibility")
+                if model_name not in installed_models():
+                    raise RuntimeError("Ollama did not register this imported model")
+                chosen = read_selection()
+                chosen[req.role] = model_name
+                _save_selection(chosen)
+                yield _frame({"type":"done","model":model_name,"role":req.role,
+                             "status":"Model imported locally and ready for use"})
+            except Exception:
+                yield _frame({"type":"error","message":"Import failed. The source file was not modified. Confirm that the GGUF is compatible with Ollama."})
+            finally:
+                _lock.release()
+        return StreamingResponse(events(),media_type="text/event-stream")
+    except (HTTPException, OSError):
+        _lock.release()
+        raise
 
 @router.post("/start")
 def start_ollama():
