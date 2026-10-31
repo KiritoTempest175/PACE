@@ -37,6 +37,10 @@ def configure() -> tuple[int, str]:
         "OLLAMA_MODEL": "qwen2.5-coder:1.5b",
         "DATABASE_URL": "sqlite:///" + (root / "pace.sqlite3").as_posix(),
         "UPLOAD_DIR": str(root / "uploads"),
+        "AI_TIMEOUT_SECONDS": "300",
+        "MAX_PROMPT_TOKENS_ESTIMATE": "128000",
+        "MAX_STREAM_OUTPUT_CHARS": "5000000",
+        "MAX_CONTINUATION_ROUNDS": "8",
         "SANDBOX_ENABLED": "false",
         "CORS_ORIGINS": "http://tauri.localhost,https://tauri.localhost,tauri://localhost",
     })
