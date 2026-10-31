@@ -1,1 +1,4 @@
-Publish verified PACE Desktop v0.4 Windows after correcting web index.html minimum file size validation. 2026-10-09.
+tag=desktop-v0.5.0-rc1
+source_sha=1b0edcf9b92b715e03cb3d2ccecc7abfe9bb990b
+native_build=41201458531
+notes=Publish only from passed Linux, macOS, Windows v0.5.0 installers with checksums and install guide.
