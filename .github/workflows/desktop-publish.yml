@@ -12,7 +12,7 @@ concurrency:
 jobs:
   release:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 50
     steps:
       - uses: actions/checkout@v4
         with:
@@ -29,7 +29,16 @@ jobs:
           [[ "$SHA" =~ ^[a-f0-9]{40}$ ]] || { echo "::error::Invalid source SHA"; exit 1; }
           test "$TAG" = desktop-v0.5.0-rc1
           git cat-file -e "$SHA^{commit}"
-          RUN="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/desktop-native-ci.yml/runs?branch=feature%2Ftauri-desktop&per_page=100" --jq '.workflow_runs[] | select(.head_sha == "'"$SHA"'" and .conclusion == "success") | .id' | head -n1)"
+          RUN=""
+          for attempt in $(seq 1 100); do
+            records="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/desktop-native-ci.yml/runs?branch=feature%2Ftauri-desktop&per_page=100")"
+            RUN="$(echo "$records" | jq -r --arg sha "$SHA" '.workflow_runs[] | select(.head_sha == $sha and .conclusion == "success") | .id' | head -n1)"
+            test -n "$RUN" && break
+            BAD="$(echo "$records" | jq -r --arg sha "$SHA" '.workflow_runs[] | select(.head_sha == $sha and (.conclusion == "failure" or .conclusion == "cancelled")) | .id' | head -n1)"
+            test -z "$BAD" || { echo "::error::Native build $BAD failed; release not published"; exit 1; }
+            echo "Waiting for verified native installers from $SHA (check $attempt)"
+            sleep 15
+          done
           test -n "$RUN" || { echo "::error::No successful 3-platform native build for $SHA"; exit 1; }
           echo "source_sha=$SHA" >> "$GITHUB_OUTPUT"
           echo "run_id=$RUN" >> "$GITHUB_OUTPUT"
