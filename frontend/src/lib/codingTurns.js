@@ -36,7 +36,12 @@ export function codingTurns(messages=[]) {
    if(continuation&&turn.response&&parseGeneratedResponse(turn.response).files.length
      &&!parseGeneratedResponse(text).files.length
      &&!/^\s*(?:import |from |def |class |function |const |let |var |#include)/m.test(text))continue;
-   turn.response+=removeOverlap(turn.response,text);
+   if(continuation&&turn.response&&!parseGeneratedResponse(turn.response).files.length
+     &&parseGeneratedResponse(text).files.length){
+    turn.response=text; // Replace earlier non-code reviewer commentary.
+   }else{
+    turn.response+=removeOverlap(turn.response,text);
+   }
    turn.incomplete=Boolean(message.incomplete);
   }
  }
