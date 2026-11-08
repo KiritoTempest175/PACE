@@ -1,0 +1,27 @@
+name: PACE Desktop 2.0 release title consistency
+on:
+  push:
+    branches: [feature/tauri-desktop]
+    paths:
+      - .github/workflows/desktop-release-metadata.yml
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  align-title:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Preserve PACE Desktop v<version> release naming
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          REPO="$GITHUB_REPOSITORY"
+          TAG="desktop-v2.0.0"
+          TITLE="PACE Desktop v2.0.0 — Local-first AI and one-click service switching"
+          gh release view "$TAG" -R "$REPO" >/dev/null
+          gh release edit "$TAG" -R "$REPO" --title "$TITLE"
+          ACTUAL="$(gh release view "$TAG" -R "$REPO" --json name --jq '.name')"
+          test "$ACTUAL" = "$TITLE"
+          echo "Release title aligned: $ACTUAL"
