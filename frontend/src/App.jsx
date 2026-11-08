@@ -3,6 +3,7 @@ import {ArrowUp,ArrowRight,BookOpen,Code2,FileText,LayoutDashboard,Menu,Plus,Upl
 import {Badge,Button,Card,Skeleton,Tabs,Toast,Tooltip} from './components/ui.jsx';
 import {createPythonRun} from './lib/pythonRunner.js';
 import {InfoPage,Footer,BrandLogo} from './components/InfoPages.jsx';
+import DesktopDownloads from './components/DesktopDownloads.jsx';
 import CodeResponse from './components/CodeResponse.jsx';
 import {parseGeneratedResponse} from './lib/parseGeneratedResponse.js';
 import {codingTurns,isLikelyCodeInput} from './lib/codingTurns.js';
@@ -78,7 +79,7 @@ function App(){
   let output='';let lastRender=0;
   const paint=()=>setMessages(prev=>prev.map(m=>m.id===assistantId?{...m,text:output}:m));
   try {
-   const request={text:value,mode:workspace==='literacy'&&!document?'coding':workspace,speed_mode:speed,conversation_id:activeId,document_id:document?.document_id};
+   const request={text:value,mode:workspace,speed_mode:speed,conversation_id:activeId,document_id:document?.document_id};
    const onStreamEvent=evt=>{
     if(evt.type==='init'){setActiveId(evt.conversation_id);setStage(evt.stage||'actor');}
     if(evt.type==='stage')setStage(evt.stage);
@@ -160,6 +161,7 @@ function App(){
       </Card>
      </div>
      <div className="recent-panel card"><strong>Recent activity</strong><p>{conversations.length?conversations.length+' conversation(s) available. Open one from the sidebar.':'No recent sessions yet. Start with Coding or Literacy.'}</p></div>
+      <DesktopDownloads/>
     </section>}
    {['docs','privacy','not-found'].includes(workspace)&&<InfoPage page={workspace} onNavigate={navigate}/>}
    {workspace==='privacy'&&<section className="privacy-controls card"><div><h3>Session data controls</h3><p>Delete conversation history and stored PDF text for this browser session from the connected API.</p></div><Button variant="secondary" disabled={online!=='online'} onClick={clearAllData}>Delete session data</Button></section>}

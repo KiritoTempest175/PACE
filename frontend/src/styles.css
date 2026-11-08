@@ -264,3 +264,21 @@ body{background:var(--canvas);color:var(--text)}
 .code-overview h3{color:#f1eafa;font-size:12px;font-weight:650;margin:0 0 11px}
 .code-overview p{margin:0 0 12px!important;line-height:1.8}
 .code-overview .small{font-size:11px!important;color:#ada0bc;opacity:.9}
+
+/* PACE 2.0: prevent intrusive browser-native horizontal scrollbar tracks while keeping content accessible. */
+html,body,#root{max-width:100%;overflow-x:clip}
+.app-shell,.main-panel,.workspace-stage,.conversation,.conversation-content,.generated-panel,.composer-wrap{min-width:0;max-width:100%}
+.pace-code-block pre,.docs-diagram,.generated-panel-scroll{scrollbar-width:none}
+.pace-code-block pre::-webkit-scrollbar,.docs-diagram::-webkit-scrollbar,.generated-panel-scroll::-webkit-scrollbar{display:none}
+.pace-code-block pre{white-space:pre-wrap;overflow-wrap:anywhere}
+.desktop-downloads{margin-top:26px;padding:24px;border:1px solid #40354e;border-radius:16px;background:linear-gradient(120deg,#1f1828,#15141d)}
+.desktop-downloads h3{margin:6px 0 8px;font-size:21px;color:#f4ebff}
+.desktop-downloads p{color:#bdb3c7;max-width:760px}
+.desktop-downloads .download-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:17px}
+.desktop-downloads .download-item{min-width:0;padding:17px;border:1px solid #51425d;border-radius:12px;background:#1a1722;display:flex;flex-direction:column;gap:7px}
+.desktop-downloads .download-item strong{font-size:15px;color:#f4effa}
+.desktop-downloads .download-item small{font-size:12px;color:#bdb1c8}
+.desktop-downloads .download-item a{display:inline-flex;align-items:center;justify-content:center;min-height:40px;padding:8px 12px;margin-top:8px;border-radius:8px;background:#8d51ca;color:white;text-decoration:none;font-weight:700;font-size:13px}
+.desktop-downloads .download-item a:hover,.desktop-downloads .download-item a:focus-visible{background:#a669e4}
+.desktop-downloads .download-sub{display:block;font-size:11px;margin-top:5px}
+@media(max-width:730px){.desktop-downloads{padding:17px}.desktop-downloads .download-grid{grid-template-columns:1fr}}

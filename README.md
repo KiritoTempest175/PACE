@@ -1,72 +1,73 @@
-# PACE — Pipelined Actor-Critic Ensemble
+# PACE · Pipelined Actor-Critic Ensemble
 
-![PACE logo](frontend/public/pace-logo.svg)
+![PACE monogram](frontend/public/pace-monogram.svg)
+
 [![CI](https://github.com/KiritoTempest175/PACE/actions/workflows/ci.yml/badge.svg)](https://github.com/KiritoTempest175/PACE/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+![Version](https://img.shields.io/badge/Desktop-2.0.0-7847B0)
+[![License](https://img.shields.io/badge/License-MIT-3B465A)](LICENSE)
 
-**PACE is an open-source coding and PDF-literacy AI workspace with transparent Fast and Pro inference, a React dashboard, and optional local desktop models.**
+**One workspace for programming, everyday conversation, and optional PDF questions.** PACE combines a React interface with a Python FastAPI backend and configurable model inference. A second model review can be requested in Pro mode; review is not a correctness guarantee.
 
-[Web app](https://pace.huzaifazaman.com) · [Documentation](docs/RELEASE_GUIDE.md) · [Security](SECURITY.md) · [Privacy](docs/RELEASE_GUIDE.md#privacy-and-retention)
+[**Launch web app**](https://pace.huzaifazaman.com) · [**Desktop installers**](https://pace.huzaifazaman.com/) · [**Desktop code**](https://github.com/KiritoTempest175/PACE/tree/feature/tauri-desktop) · [**Deployment guide**](docs/DEPLOYMENT.md) · [**Security**](SECURITY.md)
 
-## Features and limitations
+## Workspaces
 
-| Feature | Actual behavior |
-| --- | --- |
-| Coding | Separate prompt, AI explanation, and generated-code panels; code copy/download; Pyodide worker runner |
-| Literacy | Validated PDF upload and excerpt-based document questions |
-| Fast | One generation pass; Ollama can auto-continue bounded length finishes |
-| Pro | Draft and second review pass where implemented; hosted model can reuse the same weights |
-| Hosted inference | Web requests use the configured PACE backend; visitors do not connect their own provider accounts |
-| Credentials | No visitor API-key entry on the web. Hosted AI credentials, if required, are managed on the server |
-| Models | Ollama is the supported local runner; discovered GGUF/safetensors files are not proof of runnable direct loading |
-| History | Backend database stores session-scoped conversations, messages and extracted PDF text |
-| Long outputs | Explicit context/output bounds and errors; no guarantee of infinite-length results or resumable SSE replay |
+| Workspace | Intended use | Output |
+| --- | --- | --- |
+| **Coding** | Write, explain, debug, refactor programs | Dedicated explanation and generated-source panels; browser Python worker |
+| **Literacy** | Greetings, conversation, explanations and general questions | Natural-language chat without unsolicited code |
+| **Literacy + PDF** | Ask questions about an attached document | Answers informed by extracted, bounded PDF excerpts |
+
+Switching workspaces changes the backend request mode, not merely the visual layout.
+
+## Desktop 2.0
+
+Download Windows (.exe), macOS Apple Silicon (.dmg), or Linux (.deb / AppImage when available) from the **Install PACE** section of the web dashboard. Download buttons point to verified GitHub release files directly and appear only when the corresponding asset is published. Installers are unsigned; on macOS, right-click and select **Open** if Gatekeeper warns. Windows may show an unrecognized-publisher warning. Inspect the release checksums before installing.
+
+The desktop application is developed on the existing [`feature/tauri-desktop` branch](https://github.com/KiritoTempest175/PACE/tree/feature/tauri-desktop) rather than this web deployment branch. Its own README includes setup, provider switching, and native build steps.
 
 ## Architecture
 
 ```mermaid
-flowchart TD
-  Web[React Vite / Netlify] --> API[FastAPI / Render]
-  API --> DB[(SQLite or PostgreSQL)]
-  API --> PDFs[PDF extractor]
-  API --> AI[HF / Ollama / local Actor-Critic]
-  AI -.-> Tokens[Model/Python tokenizer]
-  Desktop[Tauri + bundled local FastAPI] --> Ollama[Ollama local runtime]
-  Desktop --> LocalDB[(Local SQLite)]
+flowchart LR
+  UI[React / Vite browser] -->|Session-scoped HTTPS requests| API[FastAPI backend]
+  API --> DB[(SQLite or configured PostgreSQL)]
+  API --> AI[Configured hosted or local inference]
+  PDF[Validated PDF] -->|Extracted text, bounded excerpts| API
+  DESK[Tauri desktop] -->|Loopback + session secret| LOCAL[Bundled FastAPI]
+  LOCAL --> OLLAMA[Optional Ollama runtime]
+  DESK -->|Optional| HOSTED[PACE hosted API]
+  DESK -->|Native HTTPS + OS keychain| PROVIDER[External API provider]
 ```
 
-## Quick start: web and API
+**Fast** makes one generation pass. **Pro** requests a second review pass when supported. A hosted provider may reuse one model for both passes; do not assume independently trained actor and critic models.
 
-Requires Python 3.10+, Node.js 20+, and optionally Ollama for local generation.
+## Run the web frontend and backend locally
+
+Requirements: Python 3.10+, Node.js 20+ and npm. The web UI does not need Rust. Install from the repository root:
 
 ```bash
-cp .env.example .env
 python -m venv .venv
+# Windows: .venv\\Scripts\\activate
+# Linux/macOS: source .venv/bin/activate
 pip install -r backend/requirements.txt
-uvicorn backend.main:app --reload --port 8000
-```
-
-In another terminal:
-
-```bash
 cd frontend
 npm ci
 npm run dev
 ```
 
-For actual inference configure `AI_PROVIDER=ollama` and an installed `OLLAMA_MODEL`, or `AI_PROVIDER=huggingface` with a verified `HF_SPACE_ID`. Disabled providers do not synthesize placeholder responses.
-
-## Desktop build
-
-Checkout `feature/tauri-desktop`. PACE Desktop packages a loopback FastAPI sidecar, SQLite and a Tauri UI. The `.github/workflows/desktop-native-ci.yml` workflow attempts **unsigned** native bundles for Windows, macOS and Linux and publishes build artifacts only, never a production release. Actual results and on-device checks must be verified before distributing installers.
-
-## Configuration and testing
-
-See [environment example](.env.example), [release architecture/FAQ](docs/RELEASE_GUIDE.md) and [deploy guide](docs/DEPLOYMENT.md). The default retention period is 30 days, pruned at API startup. `DELETE /my-data` erases the current session's database records, not backups or third-party copies.
+Run the API in a separate terminal:
 
 ```bash
-pip install -r requirements-dev.txt
-pytest -q tests
+# From the repository root, with the virtual environment active
+uvicorn backend.main:app --host 127.0.0.1 --port 8000 --reload
+```
+
+Copy `.env.example` into your local environment and choose a real inference provider. For Ollama, install the Ollama runtime, pull a model and configure `AI_PROVIDER=ollama` and `OLLAMA_MODEL`; for hosted inference, follow [the deployment guide](docs/DEPLOYMENT.md). If no provider is configured, the API returns an explicit error rather than a synthetic answer.
+
+For a full production web build:
+
+```bash
 cd frontend
 npm ci
 npm run lint
@@ -74,27 +75,27 @@ npm test
 npm run build
 ```
 
-**Limits:** browser direct API calls may be blocked by CORS; long input beyond the explicit token estimate returns HTTP 413; some hosted model providers and free quotas may stop output despite keep-alives. Reconnect replay is not implemented. Avoid storing sensitive documents where third-party data retention is unacceptable.
+Netlify deploys the frontend and Render is the separately configured backend. `VITE_API_BASE_URL` must be set at build time as documented in [deployment instructions](docs/NETLIFY_DEPLOYMENT.md). This repository does not store deployment keys.
 
-## Project layout
+## Tests and reliability
 
-- `frontend/`: dashboard, workspaces, model controls, docs/privacy pages, browser runner and tests
-- `backend/`, `masteries/api/`: FastAPI, request validation, SSE and session ownership
-- `masteries/services/`: inference providers, SQLite/PostgreSQL persistence, PDF processing and telemetry
-- `ai-service/`: hosted Hugging Face inference adapter
-- `desktop/`, `frontend/src-tauri/` (desktop branch): model discovery, Python sidecar and native OS keychain
-- `core/`, `infra/`: configuration and opt-in local sandbox
-- `docs/`: architecture, deployment, tests and troubleshooting
+```bash
+pip install -r requirements-dev.txt
+python -m pytest -q tests
+```
 
-## Roadmap
+GitHub Actions checks Python tests, frontend lint/tests and native installer builds where supported. Python execution in the browser uses Pyodide in a worker with resource/time limits; it is **not** a hardened sandbox and should not run untrusted programs. Generated code and Pro review results are not automatically verified.
 
-- Provider-aware completion metadata and resumable streams
-- True context-token counting and large document chunking
-- Verified direct GGUF support if runtime testing establishes it
-- OS-specific installation and accessibility audits
+## Privacy and security
 
-## License & contact
+- Web conversations and extracted PDF text are stored under a session-scoped identity in the backend database. The uploaded PDF binary is removed after processing.
+- The default retention period is **30 days**, with pruning at backend startup; upstream providers, hosting logs and backups may retain data separately.
+- Web AI keys remain on the trusted backend. The web client does not ask visitors for personal provider API keys.
+- The desktop client supports local Ollama and optional external APIs; switching to remote providers transmits prompts outside the computer.
+- See [Security](SECURITY.md), [Privacy](https://pace.huzaifazaman.com/privacy), and [testing](docs/TESTING.md).
 
-MIT — [LICENSE](LICENSE). Contributions: [CONTRIBUTING.md](CONTRIBUTING.md). Report security issues privately per [SECURITY.md](SECURITY.md).
+## Source backup and license
 
-**Maintainer:** [huzaifazaman38@gmail.com](mailto:huzaifazaman38@gmail.com) · [huzaifazaman.com](https://huzaifazaman.com) · [GitHub](https://github.com/KiritoTempest175)
+Use **Code → Download ZIP** on each branch, or access branch archive links in the desktop release notes. The GitHub Desktop 2.0 release also attaches source archives with checksums for both the web and desktop code.
+
+Distributed under the [MIT license](LICENSE). Maintained by [Muhammad Huzaifa Zaman](https://huzaifazaman.com) · [GitHub](https://github.com/KiritoTempest175) · [Contact](mailto:huzaifazaman38@gmail.com).
