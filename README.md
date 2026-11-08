@@ -1,103 +1,75 @@
-# PACE — Pipelined Actor-Critic Ensemble
+# PACE Desktop 2.0 · Pipelined Actor-Critic Ensemble
 
-![PACE logo](frontend/public/favicon.svg)
-[![CI](https://github.com/KiritoTempest175/PACE/actions/workflows/ci.yml/badge.svg)](https://github.com/KiritoTempest175/PACE/actions/workflows/ci.yml)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+![PACE monogram](frontend/public/pace-logo.svg)
 
-**Desktop branch: Tauri 2 with a bundled loopback FastAPI service and native OS credential handling.**
+[![Desktop CI](https://github.com/KiritoTempest175/PACE/actions/workflows/desktop-native-ci.yml/badge.svg?branch=feature%2Ftauri-desktop)](https://github.com/KiritoTempest175/PACE/actions/workflows/desktop-native-ci.yml)
+![Desktop version](https://img.shields.io/badge/Desktop-2.0.0-7B3FBF)
+[![MIT](https://img.shields.io/badge/License-MIT-3B465A)](LICENSE)
 
-**PACE is an open-source coding and PDF-literacy AI workspace with transparent Fast and Pro inference, a React dashboard, and optional local desktop models.**
+**A local-first workbench for AI models, general conversations, PDFs and programming.** This existing desktop branch is separate from the production web branch.
 
-[Web app](https://pace.huzaifazaman.com) · [Documentation](docs/RELEASE_GUIDE.md) · [Security](SECURITY.md) · [Privacy](docs/RELEASE_GUIDE.md#privacy-and-retention)
+[**Install from the web dashboard**](https://pace.huzaifazaman.com/) · [**Setup**](desktop/README_LOCAL.md) · [**2.0.0 notes**](desktop/RELEASE_NOTES_v2.0.0.md) · [**Web branch**](https://github.com/KiritoTempest175/PACE/tree/main) · [**Issues**](https://github.com/KiritoTempest175/PACE/issues)
 
-## Features and limitations
+## Features
 
-| Feature | Actual behavior |
+| Workspace or capability | What it does |
 | --- | --- |
-| Coding | Configured model inference; code-fence copy, wrap and download; Pyodide worker runner |
-| Literacy | Validated PDF upload and excerpt-based document questions |
-| Fast | One generation pass; Ollama can auto-continue bounded length finishes |
-| Pro | Draft and second review pass where implemented; hosted model can reuse the same weights |
-| Custom providers | OpenAI-compatible, OpenRouter, Anthropic and Google direct browser connections; provider CORS restrictions apply |
-| Credentials | Browser keys kept in memory, not transmitted to the PACE backend; desktop keyring implementation needs native verification |
-| Models | Ollama is the supported local runner; discovered GGUF/safetensors files are not proof of runnable direct loading |
-| History | Backend database stores session-scoped conversations, messages and extracted PDF text |
-| Long outputs | Explicit context/output bounds and errors; no guarantee of infinite-length results or resumable SSE replay |
+| **Coding** | Code generation, explanation, file extraction and a browser-based Python WebAssembly worker |
+| **Literacy** | Conversational chat; add a PDF for document-grounded questions |
+| **Local** | Bundled FastAPI + SQLite, optional Ollama models; separate Generator and Reviewer selections |
+| **Hosted** | PACE hosted API, chosen from the top bar |
+| **External API** | Native requests to configured OpenAI-compatible, OpenRouter, Anthropic, Google or custom models |
+| **Fast / Pro** | Single generation vs optional second model review; review is not a correctness guarantee |
 
-## Architecture
+## Choose where your prompt goes
+
+**Active AI service** is shown at the top of the desktop interface. Select **Local**, **Hosted** or any saved **API** provider in one action, without visiting Preferences. The label shows the current provider; switching clears conversation and PDF context to avoid accidental cross-provider sharing.
 
 ```mermaid
-flowchart TD
-  Web[React Vite / Netlify] --> API[FastAPI / Render]
-  Web -->|optional direct key & prompt| Provider[User's chosen API provider]
-  API --> DB[(SQLite or PostgreSQL)]
-  API --> PDFs[PDF extractor]
-  API --> AI[HF / Ollama / local Actor-Critic]
-  AI -.-> Tokens[Model/Python tokenizer]
-  Desktop[Tauri + bundled local FastAPI] --> Ollama[Ollama local runtime]
-  Desktop --> LocalDB[(Local SQLite)]
+flowchart LR
+ UI[Tauri + React] --> MODE{Active AI service}
+ MODE -->|Local| API[Bundled FastAPI + SQLite]
+ API --> OLLAMA[Optional Ollama Generator / Reviewer]
+ MODE -->|Hosted| CLOUD[PACE hosted API]
+ MODE -->|Direct API| RUST[Native Rust + OS keychain]
+ RUST --> EXT[Selected remote provider]
 ```
 
-## Quick start: shared API and frontend
+Using a remote API transmits your prompt off-device and may cost money. The direct-provider pathway does not automatically attach local PDF context.
 
-Requires Python 3.10+, Node.js 20+, and optionally Ollama for local generation.
+## Installers and backup
+
+The [PACE web dashboard](https://pace.huzaifazaman.com/) will show direct links to a verified public 2.0.0 release when available: Windows x64 EXE, macOS Apple Silicon DMG, Linux x64 DEB and optional AppImage. All are unsigned. Verify checksums before opening.
+
+The 2.0.0 GitHub release attaches **complete editable source archives for web and desktop**, in addition to installers, checksums and the full installation guide. The desktop branch can also be downloaded from GitHub's Code → Download ZIP menu.
+
+## Run from source
+
+Requirements: Python 3.11, Node.js 22, stable Rust, native toolchains and the dependencies listed in [desktop setup](desktop/README_LOCAL.md).
 
 ```bash
-cp .env.example .env
+git clone --branch feature/tauri-desktop https://github.com/KiritoTempest175/PACE.git
+cd PACE
 python -m venv .venv
-pip install -r backend/requirements.txt
-uvicorn backend.main:app --reload --port 8000
-```
-
-In another terminal:
-
-```bash
-cd frontend
-npm ci
-npm run dev
-```
-
-For actual inference configure `AI_PROVIDER=ollama` and an installed `OLLAMA_MODEL`, or `AI_PROVIDER=huggingface` with a verified `HF_SPACE_ID`. Disabled providers do not synthesize placeholder responses.
-
-## Desktop build
-
-Checkout `feature/tauri-desktop`. PACE Desktop packages a loopback FastAPI sidecar, SQLite and a Tauri UI. The `.github/workflows/desktop-native-ci.yml` workflow attempts **unsigned** native bundles for Windows, macOS and Linux and publishes build artifacts only, never a production release. Actual results and on-device checks must be verified before distributing installers.
-
-## Configuration and testing
-
-See [environment example](.env.example), [release architecture/FAQ](docs/RELEASE_GUIDE.md) and [deploy guide](docs/DEPLOYMENT.md). The default retention period is 30 days, pruned at API startup. `DELETE /my-data` erases the current session's database records, not backups or third-party copies.
-
-```bash
-pip install -r requirements-dev.txt
-pytest -q tests
+# activate the virtual environment
+python -m pip install -r desktop/requirements-local.txt
+python -m pip install -r requirements-dev.txt
+python -m pytest -q tests
 cd frontend
 npm ci
 npm run lint
 npm test
-npm run build
 ```
 
-**Limits:** browser direct API calls may be blocked by CORS; long input beyond the explicit token estimate returns HTTP 413; some hosted model providers and free quotas may stop output despite keep-alives. Reconnect replay is not implemented. Avoid storing sensitive documents where third-party data retention is unacceptable.
+A complete native installer additionally requires freezing the Python backend as `pace-api`, embedding the correct target-triple binary under `frontend/src-tauri/binaries/`, generating Tauri icons, and building branded installer art. Use the [native CI workflow](.github/workflows/desktop-native-ci.yml) as the reference for all three operating systems.
 
-## Project layout
+## Security, privacy and known limitations
 
-- `frontend/`: dashboard, workspaces, model controls, docs/privacy pages, browser runner and tests
-- `backend/`, `masteries/api/`: FastAPI, request validation, SSE and session ownership
-- `masteries/services/`: inference providers, SQLite/PostgreSQL persistence, PDF processing and telemetry
-- `ai-service/`: hosted Hugging Face inference adapter
-- `desktop/`, `frontend/src-tauri/` (desktop branch): model discovery, Python sidecar and native OS keychain
-- `core/`, `infra/`: configuration and opt-in local sandbox
-- `docs/`: architecture, deployment, tests and troubleshooting
+- The local backend uses loopback with an ephemeral caller secret.
+- External API keys are stored in OS keychain service `app.pace.workspaces.byok`, not plaintext client configuration.
+- PDFs are validated, extracted to text, and associated with the selected backend's session storage; original upload binaries are removed.
+- Model weights and Ollama are not bundled. A discovered GGUF/safetensors file might not be runnable.
+- Python execution in a WebAssembly worker is not a hardened sandbox; never execute untrusted generated code.
+- Native installers are unsigned and unnotarized; build CI does not replace clean-machine installation tests.
 
-## Roadmap
-
-- Provider-aware completion metadata and resumable streams
-- True context-token counting and large document chunking
-- Verified direct GGUF support if runtime testing establishes it
-- OS-specific installation and accessibility audits
-
-## License & contact
-
-MIT — [LICENSE](LICENSE). Contributions: [CONTRIBUTING.md](CONTRIBUTING.md). Report security issues privately per [SECURITY.md](SECURITY.md).
-
-**Maintainer:** [huzaifazaman38@gmail.com](mailto:huzaifazaman38@gmail.com) · [huzaifazaman.com](https://huzaifazaman.com) · [GitHub](https://github.com/KiritoTempest175)
+**Maintainer:** [Muhammad Huzaifa Zaman](https://huzaifazaman.com) · [GitHub](https://github.com/KiritoTempest175) · [Contact](mailto:huzaifazaman38@gmail.com). MIT [license](LICENSE).

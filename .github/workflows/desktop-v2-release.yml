@@ -1,0 +1,119 @@
+name: Publish verified PACE Desktop 2.0.0
+on:
+  push:
+    branches: [feature/tauri-desktop]
+    paths:
+      - .github/workflows/desktop-v2-release.yml
+  workflow_dispatch:
+permissions:
+  contents: write
+  actions: read
+concurrency:
+  group: pace-desktop-2.0.0
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 110
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Require successful native CI for this exact source SHA
+        id: verified
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_SHA" =~ ^[a-f0-9]{40}$ ]]
+          RUN=""
+          for attempt in $(seq 1 120); do
+            records="$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/desktop-native-ci.yml/runs?branch=feature%2Ftauri-desktop&per_page=100")"
+            RUN="$(echo "$records" | jq -r --arg sha "$SOURCE_SHA" '.workflow_runs[] | select(.head_sha == $sha and .conclusion == "success") | .id' | head -n1)"
+            test -n "$RUN" && break
+            BAD="$(echo "$records" | jq -r --arg sha "$SOURCE_SHA" '.workflow_runs[] | select(.head_sha == $sha and (.conclusion == "failure" or .conclusion == "cancelled")) | .id' | head -n1)"
+            test -z "$BAD" || { echo "::error::Native CI failed for $SOURCE_SHA (run $BAD)"; exit 1; }
+            echo "Waiting for native installer verification for $SOURCE_SHA ($attempt)"
+            sleep 20
+          done
+          test -n "$RUN" || { echo "::error::No successful 3-platform native CI for $SOURCE_SHA"; exit 1; }
+          echo "run_id=$RUN" >> "$GITHUB_OUTPUT"
+      - name: Download assets from the verified run
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ steps.verified.outputs.run_id }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          gh run download "$RUN_ID" -R "$GITHUB_REPOSITORY" -D artifacts --pattern 'pace-desktop-*-unsigned'
+          find artifacts -type f -printf '%p (%s bytes)\n'
+      - name: Validate Windows, macOS and Linux assets and package source
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release
+          mapfile -d '' WIN < <(find artifacts -type f -name '*x64-setup.exe' -print0)
+          mapfile -d '' MAC < <(find artifacts -type f -name '*aarch64.dmg' -print0)
+          mapfile -d '' DEB < <(find artifacts -type f -name '*amd64.deb' -print0)
+          mapfile -d '' APP < <(find artifacts -type f -name '*amd64.AppImage' -print0)
+          test "${#WIN[@]}" -eq 1 || { echo "::error::Expected one Windows x64 EXE"; exit 1; }
+          test "${#MAC[@]}" -eq 1 || { echo "::error::Expected one macOS ARM64 DMG"; exit 1; }
+          test "${#DEB[@]}" -eq 1 || { echo "::error::Expected one Linux amd64 DEB"; exit 1; }
+          for file in "${WIN[0]}" "${MAC[0]}" "${DEB[0]}"; do
+            test "$(stat -c %s "$file")" -gt 1000000
+          done
+          cp "${WIN[0]}" release/PACE_2.0.0_x64-setup.exe
+          cp "${MAC[0]}" release/PACE_2.0.0_aarch64.dmg
+          cp "${DEB[0]}" release/PACE_2.0.0_amd64.deb
+          if test "${#APP[@]}" -eq 1 && test "$(stat -c %s "${APP[0]}")" -gt 1000000; then
+            cp "${APP[0]}" release/PACE_2.0.0_amd64.AppImage
+          fi
+          cp desktop/RELEASE_NOTES_v2.0.0.md release/RELEASE_NOTES.md
+          cp desktop/README_LOCAL.md release/INSTALLATION.md
+          git archive --format=zip --output=release/PACE_Desktop_Source_v2.0.0.zip "$SOURCE_SHA"
+          git fetch origin main --depth=1
+          git archive --format=zip --output=release/PACE_Web_Source_v2.0.0.zip FETCH_HEAD
+          (
+            cd release
+            find . -maxdepth 1 -type f ! -name SHA256SUMS.txt -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS.txt
+            sha256sum --check SHA256SUMS.txt
+          )
+          ls -lh release/
+      - name: Preserve complete bundle as Actions artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: PACE-2.0.0-Complete-Release
+          path: release/*
+          retention-days: 30
+          if-no-files-found: error
+      - name: Publish verified public Desktop 2.0.0 release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PACE_RELEASE_TOKEN: ${{ secrets.PACE_RELEASE_TOKEN }}
+          SOURCE_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG=desktop-v2.0.0
+          if gh release view "$TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "::error::Release already exists; refusing to replace published files"
+            exit 1
+          fi
+          create_release() {
+            gh release create "$TAG" release/* -R "$GITHUB_REPOSITORY" --target "$SOURCE_SHA" --draft --title 'PACE Desktop 2.0.0 — Local-first AI and one-click service switching' --notes-file desktop/RELEASE_NOTES_v2.0.0.md
+          }
+          if ! create_release; then
+            test -n "$PACE_RELEASE_TOKEN" || exit 1
+            GH_TOKEN="$PACE_RELEASE_TOKEN" create_release
+          fi
+          NUM="$(gh release view "$TAG" -R "$GITHUB_REPOSITORY" --json assets --jq '.assets | length')"
+          test "$NUM" -ge 8 || { echo "::error::Incomplete release assets; kept as draft"; exit 1; }
+          if ! gh release edit "$TAG" -R "$GITHUB_REPOSITORY" --draft=false --prerelease=false --latest; then
+            test -n "$PACE_RELEASE_TOKEN" || exit 1
+            GH_TOKEN="$PACE_RELEASE_TOKEN" gh release edit "$TAG" -R "$GITHUB_REPOSITORY" --draft=false --prerelease=false --latest
+          fi
+          gh release view "$TAG" -R "$GITHUB_REPOSITORY" --json url,isDraft,isPrerelease,tagName,assets
