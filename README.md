@@ -30,7 +30,7 @@ The desktop application is developed on the existing [`feature/tauri-desktop` br
 
 ```mermaid
 flowchart LR
-  UI[React / Vite browser] -->|Session-scoped HTTPS requests| API[FastAPI backend]
+  UI[Vercel React / Vite browser] -->|HTTPS /api rewrite| API[Render FastAPI backend]
   API --> DB[(SQLite or configured PostgreSQL)]
   API --> AI[Configured hosted or local inference]
   PDF[Validated PDF] -->|Extracted text, bounded excerpts| API
@@ -75,7 +75,7 @@ npm test
 npm run build
 ```
 
-Netlify deploys the frontend and Render is the separately configured backend. `VITE_API_BASE_URL` must be set at build time as documented in [deployment instructions](docs/NETLIFY_DEPLOYMENT.md). This repository does not store deployment keys.
+**Vercel** serves the production React/Vite frontend at [pace.huzaifazaman.com](https://pace.huzaifazaman.com). The [existing Vercel rewrite](frontend/vercel.json) forwards `/api/*` to the separate Render FastAPI backend, so the normal client default `/api` works without exposing model secrets. See [Vercel deployment notes](docs/VERCEL_DEPLOYMENT.md). This repository does not store deployment keys, and pushing this code does not change the Vercel project settings.
 
 ## Tests and reliability
 

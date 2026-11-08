@@ -1,3 +1,5 @@
+> **November 2026 update:** The production frontend has migrated to **Vercel**. This October 2026 document is a historical record of the earlier Netlify deployment plan; its Netlify settings and old manual steps must not be used for current production operations. Use [VERCEL_DEPLOYMENT.md](VERCEL_DEPLOYMENT.md) for the current React/Vite hosting setup. The API remains on Render.
+
 # Three-platform deployment guide (October 2026)
 
 These are manual, account-authorized steps. No services were deployed by this patch. Avoid placing tokens in Vite variables; all `VITE_*` values are publicly visible in the browser bundle.
