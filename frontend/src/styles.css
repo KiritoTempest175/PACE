@@ -88,3 +88,16 @@
  .workspace-stage.is-desktop-coding .generated-panel{order:2;min-height:260px;height:auto;max-height:460px}
  .desktop-welcome-banner{flex-wrap:wrap}.discovered-model{flex-direction:column;align-items:stretch}
 }
+
+/* PACE Desktop 2.0: clean horizontal layout and live provider selector. */
+html,body,#root{max-width:100%;overflow-x:clip}
+.app-shell,.main-panel,.workspace-stage,.conversation,.conversation-content,.generated-panel,.composer-wrap{min-width:0;max-width:100%}
+.pace-code-block pre,.docs-diagram,.generated-panel-scroll{scrollbar-width:none}
+.pace-code-block pre::-webkit-scrollbar,.docs-diagram::-webkit-scrollbar,.generated-panel-scroll::-webkit-scrollbar{display:none}
+.pace-code-block pre{white-space:pre-wrap;overflow-wrap:anywhere}
+.service-selector{display:flex;flex-direction:column;gap:3px;min-width:165px;max-width:230px;color:#e9d6ff;font-size:11px;font-weight:650}
+.service-selector span{letter-spacing:.04em;text-transform:uppercase;color:#bdaccd;font-size:10px}
+.service-selector select{width:100%;min-height:36px;padding:7px 10px;border-radius:9px;border:1px solid #7b4da4;background:#21192c;color:#f7edff;font:600 12px/1.4 Inter,system-ui,sans-serif;cursor:pointer}
+.service-selector select:disabled{opacity:.55;cursor:not-allowed}
+.service-selector small{font:500 10px/1.5 Inter,system-ui,sans-serif;color:#b5a8c3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media(max-width:690px){.service-selector{min-width:130px;max-width:168px}.service-selector small{display:none}.service-selector select{min-height:33px}}

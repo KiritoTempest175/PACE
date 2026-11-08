@@ -1,7 +1,7 @@
 [package]
 name = "pace-desktop"
-version = "0.5.0"
-description = "PACE AI Workspaces desktop client"
+version = "2.0.0"
+description = "PACE Desktop 2.0 — local-first AI and native provider switching"
 authors = ["PACE contributors"]
 license = "MIT"
 edition = "2021"

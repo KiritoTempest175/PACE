@@ -5,6 +5,7 @@ on:
     branches: [feature/tauri-desktop]
     paths:
       - .github/workflows/desktop-native-ci.yml
+      - .github/workflows/desktop-v2-release.yml
       - 'frontend/src-tauri/**'
       - 'desktop/**'
       - 'frontend/src/**'

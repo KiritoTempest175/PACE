@@ -6,6 +6,7 @@ import {InfoPage,Footer,BrandLogo} from './components/InfoPages.jsx';
 import CodeResponse from './components/CodeResponse.jsx';
 import ModelsPage from './components/ModelsPage.jsx';
 import {directGenerate} from './lib/directProvider.js';
+import {activeServiceLabel,activeServiceOptions} from './lib/activeService.js';
 
 import {useTheme} from './ThemeContext.jsx';
 import {json,wakeServer,streamAnswer} from './lib/api.js';
@@ -108,7 +109,26 @@ function App(){
  };
  const uploadPdf=async file=>{if(!file)return;if(!file.name.toLowerCase().endsWith('.pdf')||file.size>8*1024*1024){setError('Select a PDF smaller than 8 MB.');return;}setUploading(true);setError('');try{const data=new FormData();data.append('file',file);const outcome=await json('/upload',{method:'POST',body:data});setDocument({...outcome,displayName:file.name});setNotice('Document processed. You can now ask questions about it.');}catch(e){setError(e.message);}finally{setUploading(false);if(fileRef.current)fileRef.current.value='';}};
  const removeChat=async item=>{if(!window.confirm('Delete this conversation?'))return;try{await json(`/conversations/${encodeURIComponent(item.id)}`,{method:'DELETE'});if(item.id===activeId)newChat();await refreshList();}catch(e){setError(e.message);}};
- const saveDesktopEndpoint=()=>{if(busy){setError('Wait for the current response before changing endpoints.');return;}try{const next=setDesktopApiBase(desktopEndpoint);setDesktopEndpoint(next);setConversations([]);setActiveId(null);setMessages([]);setDocument(null);setProvider('disabled');setOnline('checking');setSettingsOpen(false);setNotice('Connecting to '+next);setBoot(v=>v+1);}catch(e){setError(e.message);}};
+ const chooseDesktopService=choice=>{
+   if(busy){setError('Finish or stop the current response before changing services.');return;}
+   if(choice.startsWith('provider:')){
+    const chosen=models.find(m=>m.id===choice.slice(9));
+    if(!chosen||!chosen.hasKey){setError('This API provider has no saved credential. Open Models to configure it.');return;}
+    setActiveCustom(chosen);setActiveId(null);setMessages([]);
+    setSelectedTurnOffset(0);setDocument(null);setError('');
+    setNotice('Now using '+chosen.name+' via '+chosen.provider+' API.');
+    return;
+   }
+   try{
+    setDesktopApiBase(choice);
+    setActiveCustom(null);setDesktopEndpoint(choice);setConversations([]);
+    setActiveId(null);setMessages([]);setSelectedTurnOffset(0);setDocument(null);
+    setProvider('disabled');setOnline('checking');setError('');
+    setNotice(choice==='local'?'Switching to local PACE AI…':'Switching to the hosted PACE API…');
+    setBoot(v=>v+1);
+   }catch(e){setError(e.message);}
+  };
+  const saveDesktopEndpoint=()=>{chooseDesktopService(desktopEndpoint==='hosted'||desktopEndpoint==='local'?desktopEndpoint:desktopConnectionKind());setSettingsOpen(false);};
  const activeWorkspace=WORKSPACES.find(w=>w.id===workspace) || {label:'Dashboard',description:'System overview',Icon:LayoutDashboard};
  const navigate=page=>{window.history.pushState(null,'',page==='dashboard'?'/':'/'+page);setWorkspace(page);setSidebarOpen(false);setError('');};
  const goDashboard=()=>navigate('dashboard');
@@ -116,6 +136,9 @@ function App(){
  const selectedCodingTurn=codingTurnsList[Math.max(0,codingTurnsList.length-1-selectedTurnOffset)]||null;
  const parsedCodingResponse=parseGeneratedResponse(selectedCodingTurn?.response||'');
  const isLocal=IS_PACE_DESKTOP&&desktopConnectionKind()==='local'&&!activeCustom&&['ollama','local'].includes(provider);
+  const connectionChoice=activeCustom?'provider:'+activeCustom.id:desktopConnectionKind();
+  const serviceName=activeServiceLabel({activeCustom,connectionKind:desktopConnectionKind(),provider});
+  const serviceChoices=activeServiceOptions(models);
  return <div className="app-shell">
   <a href="#main" className="skip-link">Skip to workspace</a>
   {sidebarOpen&&<button className="mobile-backdrop" aria-label="Close navigation" onClick={()=>setSidebarOpen(false)}/>}
@@ -127,7 +150,7 @@ function App(){
    <div className="sidebar-footer"><Button variant="ghost" onClick={()=>navigate('settings')}><Settings size={17}/> Settings page</Button><Button variant="ghost" onClick={()=>setSettingsOpen(true)}><Settings size={17}/> Preferences</Button><p className="small muted">Privacy-aware session storage</p></div>
   </aside>
   <main id="main" className="main-panel">
-   <header className="topbar"><div className="topbar-left"><Button size="sm" variant="ghost" className="mobile-menu" aria-label="Open navigation" aria-expanded={sidebarOpen} aria-controls="pace-sidebar" onClick={()=>setSidebarOpen(true)}><Menu size={20}/></Button><div><p className="eyebrow">WORKSPACE</p><h1>{activeWorkspace.label}</h1></div></div><div className="topbar-actions"><Badge tone={isLocal?'success':'neutral'}>{isLocal?'Local':'Cloud'}</Badge><Badge tone={online==='online'?'success':online==='waking'?'warning':'neutral'}>{online==='waking'&&<LoaderCircle size={12} className="spin"/>}{statusLabel}</Badge><Tooltip text="System telemetry"><Button variant="ghost" size="sm" aria-label="Toggle telemetry" aria-expanded={telemetryOpen} onClick={()=>setTelemetryOpen(x=>!x)}><Activity size={18}/></Button></Tooltip><Tooltip text="Settings"><Button variant="ghost" size="sm" aria-label="Settings" onClick={()=>setSettingsOpen(true)}><Settings size={18}/></Button></Tooltip></div></header>
+   <header className="topbar"><div className="topbar-left"><Button size="sm" variant="ghost" className="mobile-menu" aria-label="Open navigation" aria-expanded={sidebarOpen} aria-controls="pace-sidebar" onClick={()=>setSidebarOpen(true)}><Menu size={20}/></Button><div><p className="eyebrow">WORKSPACE</p><h1>{activeWorkspace.label}</h1></div></div><div className="topbar-actions">{IS_PACE_DESKTOP&&<label className="service-selector"><span>Active AI service</span><select aria-label="Active AI service" title={serviceName} value={connectionChoice} disabled={busy} onChange={e=>chooseDesktopService(e.target.value)}>{serviceChoices.map(option=><option key={option.value} value={option.value}>{option.label}</option>)}</select><small title={serviceName}>{serviceName}</small></label>}<Badge tone={isLocal?'success':'neutral'}>{isLocal?'Local':'Cloud'}</Badge><Badge tone={online==='online'?'success':online==='waking'?'warning':'neutral'}>{online==='waking'&&<LoaderCircle size={12} className="spin"/>}{statusLabel}</Badge><Tooltip text="System telemetry"><Button variant="ghost" size="sm" aria-label="Toggle telemetry" aria-expanded={telemetryOpen} onClick={()=>setTelemetryOpen(x=>!x)}><Activity size={18}/></Button></Tooltip><Tooltip text="Settings"><Button variant="ghost" size="sm" aria-label="Settings" onClick={()=>setSettingsOpen(true)}><Settings size={18}/></Button></Tooltip></div></header>
    {telemetryOpen&&<Card className="telemetry"><div className="telemetry-head"><h2>System telemetry</h2><Badge>Measured on API host</Badge></div>{!telemetry?<p className="muted">Live telemetry is not currently available.</p>:<dl><div><dt>CPU usage</dt><dd>{telemetry.cpu_utilization??'—'}%</dd></div><div><dt>Memory</dt><dd>{telemetry.ram_usage_mb??'—'} MB</dd></div><div><dt>Device</dt><dd>{telemetry.device??'Unknown'}</dd></div><div><dt>Status</dt><dd>{telemetry.status??'Unknown'}</dd></div></dl>}</Card>}
    {workspace==='coding'&&<div className="coding-tools"><details><summary><TerminalSquare size={16}/> Python runner <Badge tone="success">Runs on your device</Badge></summary>
      <label className="field" htmlFor="sandbox-code"><span>Python source (local WebAssembly runtime)</span><textarea id="sandbox-code" spellCheck="false" value={code} onChange={e=>setCode(e.target.value)} rows={5} placeholder="print('Hello from PACE')"/></label>
@@ -151,7 +174,7 @@ function App(){
        <p className="muted">{busy?'Generating source code…':'No usable explanation was returned. Try again or select another model.'}</p>}
    </div></section>}
    {workspace==='literacy'&&<section className="conversation" aria-label="Conversation panel"><div className="conversation-content">
-    {loadingHistory?<div className="history-loading"><Skeleton/><Skeleton width="75%"/></div>:messages.length===0?<div className="empty-state"><h2>Ask about a PDF</h2><p>Upload a document first, then ask questions about it.</p></div>:
+    {loadingHistory?<div className="history-loading"><Skeleton/><Skeleton width="75%"/></div>:messages.length===0?<div className="empty-state"><h2>Start a conversation</h2><p>Ask a general question or upload a PDF for document-grounded answers. Use Coding for programs.</p></div>:
     <div className="message-list" role="log" aria-live="polite">{messages.map((m,i)=><article className={`message ${m.role==='user'?'is-user':''}`} key={m.id||i}><div className="avatar">{m.role==='user'?'Y':'P'}</div><div className="message-body"><strong>{m.role==='user'?'You':'PACE'}</strong>{m.role==='assistant'?<CodeResponse text={m.text}/>:<p>{m.text}</p>}</div></article>)}<div ref={scrollRef}/></div>}
    </div></section>}
    {workspace==='coding'&&<aside className="generated-panel" aria-label="Generated code panel"><header className="generated-panel-header"><Code2 size={17}/><h2>Generated code</h2><span>For the selected request</span></header>
